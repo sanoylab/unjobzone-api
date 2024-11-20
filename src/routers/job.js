@@ -4,6 +4,7 @@ const router = express.Router();
 const {
   getAll,
   getById, 
+  getFilteredJobs
 } = require("../controllers/jobController");
 /**
  * @swagger
@@ -122,7 +123,7 @@ const {
  *   get:
  *     summary: Returns the list of all the jobs
  *     tags: [Job]
-  *     parameters:
+ *     parameters:
  *       - in: query
  *         name: page
  *         schema:
@@ -171,5 +172,81 @@ router.get("/", getAll);
  */
 
 router.get("/:id", getById);
+
+/**
+ * @swagger
+ * /api/v1/jobs/filtered/{query}:
+ *   get:
+ *     summary: Get jobs by filters
+ *     tags: [Job]
+ *     parameters:
+ *       - in: query
+ *         name: duty_station
+ *         schema:
+ *           type: string
+ *         description: Duty Station
+ *       - in: query
+ *         name: dept
+ *         schema:
+ *           type: string
+ *         description: Department
+ *       - in: query
+ *         name: recruitment_type
+ *         schema:
+ *           type: string
+ *         description: Recruitment Type
+ *       - in: query
+ *         name: start_date
+ *         schema:
+ *           type: string
+ *         description: Start Date
+ *       - in: query
+ *         name: end_date
+ *         schema:
+ *           type: string
+ *         description: End Date
+ *       - in: query
+ *         name: jn
+ *         schema:
+ *           type: string
+ *         description: JN
+ *       - in: query
+ *         name: jf
+ *         schema:
+ *           type: string
+ *         description: JF
+ *       - in: query
+ *         name: jc
+ *         schema:
+ *           type: string
+ *         description: JC
+ *       - in: query
+ *         name: jl
+ *         schema:
+ *           type: string
+ *         description: JL
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *         description: Page number for pagination
+ *       - in: query
+ *         name: size
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *         description: Number of items per page
+ *     responses:
+ *       200:
+ *         description: The job information filtered by the provided parameters
+ *         contents:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/Job'
+ */
+router.get("/filtered/:query", getFilteredJobs);
 
 module.exports = router;
