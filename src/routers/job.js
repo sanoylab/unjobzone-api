@@ -1,5 +1,6 @@
 const express = require("express");
 const router = express.Router();
+const {auth} = require("../middleware/auth");
 
 const {
   getAll,
@@ -133,7 +134,6 @@ const {
  *         name: size
  *         schema:
  *           type: integer
- *         required: true
  *         description: The number of jobs to return
  *     responses:
  *       200:
@@ -145,7 +145,7 @@ const {
  *               items:
  *                 $ref: '#/components/schemas/Job'
  */
-router.get("/", getAll);
+router.get("/", auth, getAll);
 
 /**
  * @swagger
@@ -171,7 +171,7 @@ router.get("/", getAll);
  *         description: The job was not found
  */
 
-router.get("/:id", getById);
+router.get("/:id", auth, getById);
 
 /**
  * @swagger
@@ -235,6 +235,6 @@ router.get("/:id", getById);
  *               items:
  *                 $ref: '#/components/schemas/Job'
  */
-router.get("/filtered/:query", getFilteredJobs);
+router.get("/filtered/:query", auth, getFilteredJobs);
 
 module.exports = router;

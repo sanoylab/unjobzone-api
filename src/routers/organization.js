@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-
+const { auth } = require("../middleware/auth");
 const {
   getAll,
   getById
@@ -104,7 +104,7 @@ const {
  *               items:
  *                 $ref: '#/components/schemas/Organization'
  */
-router.get("/", getAll);
+router.get("/", auth, getAll);
 
 /**
  * @swagger
@@ -130,5 +130,5 @@ router.get("/", getAll);
  *         description: The organization was not found
  */
 
-router.get("/:id", getById);
+router.get("/:id", auth, getById);
 module.exports = router;
