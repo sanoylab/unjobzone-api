@@ -225,18 +225,6 @@ router.get("/:id", getById);
  *         schema:
  *           type: string
  *         description: JL
- *       - in: query
- *         name: page
- *         schema:
- *           type: integer
- *           default: 1
- *         description: Page number for pagination
- *       - in: query
- *         name: size
- *         schema:
- *           type: integer
- *           default: 10
- *         description: Number of items per page
  *     responses:
  *       200:
  *         description: The job information filtered by the provided parameters

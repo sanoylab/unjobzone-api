@@ -1,0 +1,14 @@
+CREATE TABLE organization (
+    id SERIAL PRIMARY KEY,
+    organization_type VARCHAR(255),
+    logo VARCHAR(255),
+    banner VARCHAR(255),
+    short_name VARCHAR(100) NOT NULL,
+    long_name VARCHAR(255) NOT NULL,
+    headquarters VARCHAR(255) NOT NULL,
+    founded VARCHAR(50) NOT NULL,
+    about TEXT NOT NULL,
+    website_url VARCHAR(200) NOT NULL,
+    twitter_url VARCHAR(200) NOT NULL,
+    facebook_url VARCHAR(200) NOT NULL
+);

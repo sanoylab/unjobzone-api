@@ -14,13 +14,23 @@ module.exports.getAll = async (req, res) => {
 	 FROM job_vacancies order by id LIMIT ${size}  OFFSET ((${page} - 1) * ${size});`;
 
     let result = null;
+
+    // Query to get the total count of records
+    let countQuery = 'SELECT COUNT(*) FROM job_vacancies';
+    let countResult = null;
+
+
+
     try {
       result = await pool.query(query);
+      countResult = await pool.query(countQuery);
+
     } catch (e) {
       console.log(e);
     }   
+    const totalRecords = parseInt(countResult.rows[0].count, 10);
 
-    res.status(200).json({ success: true, timestamp: new Date(), data: result.rows });
+    res.status(200).json({ success: true, totalRecords, timestamp: new Date(), data: result.rows });
   } catch (e) {
     res.status(400).json({ success: false, message: err.message });
   }
@@ -45,37 +55,46 @@ module.exports.getById = async (req, res) => {
 
 module.exports.getFilteredJobs = async (req, res) => {
   try {
-    let query = 'SELECT id, job_id, language, category_code, job_title, job_code_title, job_description, job_family_code, job_level, duty_station, recruitment_type, start_date, end_date, dept, total_count, jn, jf, jc, jl, created, data_source FROM job_vacancies WHERE 1=1';
+    let baseQuery = 'SELECT id, job_id, language, category_code, job_title, job_code_title, job_description, job_family_code, job_level, duty_station, recruitment_type, start_date, end_date, dept, total_count, jn, jf, jc, jl, created, data_source FROM job_vacancies WHERE 1=1';
+    let countQuery = 'SELECT COUNT(*) FROM job_vacancies WHERE 1=1';
     const queryParams = [];
-   
+
     // Dynamically construct the WHERE clause based on filters
     for (const [key, value] of Object.entries(req.query)) {
       if (key !== 'page' && key !== 'size') {
         if (typeof value === 'string') {
-          query += ` AND ${key} ILIKE $${queryParams.length + 1}`;
+          baseQuery += ` AND ${key} ILIKE $${queryParams.length + 1}`;
+          countQuery += ` AND ${key} ILIKE $${queryParams.length + 1}`;
         } else {
-          query += ` AND ${key} = $${queryParams.length + 1}`;
+          baseQuery += ` AND ${key} = $${queryParams.length + 1}`;
+          countQuery += ` AND ${key} = $${queryParams.length + 1}`;
         }
         queryParams.push(value);
       }
     }
+
+    // Add pagination
     const page = req.query.page || 1;
     const size = req.query.size || 10;
     const offset = (page - 1) * size;
-    query += ` ORDER BY id LIMIT $${queryParams.length + 1} OFFSET $${queryParams.length + 2}`;
+    baseQuery += ` ORDER BY id LIMIT $${queryParams.length + 1} OFFSET $${queryParams.length + 2}`;
     queryParams.push(size, offset);
 
-    
     let result = null;
+    let countResult = null;
 
     try {
-      result = await pool.query(query, queryParams);
+      result = await pool.query(baseQuery, queryParams);
+      countResult = await pool.query(countQuery, queryParams.slice(0, -2)); // Exclude pagination params for count query
       
     } catch (e) {
       console.log(e);
+      return res.status(500).json({ success: false, message: 'Database query error' });
     }
 
-    res.status(200).json({ success: true, timestamp: new Date(), data: result.rows });
+    const totalRecords = parseInt(countResult.rows[0].count, 10);
+
+    res.status(200).json({ success: true, timestamp: new Date(), totalRecords, data: result.rows });
   } catch (e) {
     res.status(400).json({ success: false, message: e.message });
   }
