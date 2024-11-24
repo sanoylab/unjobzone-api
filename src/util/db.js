@@ -6,7 +6,9 @@ const credentials = {
   database: process.env.PGDATABASE,
   password: process.env.PGPASSWORD,
   port: process.env.PGPORT,
-  ssl:false
+  ssl: {
+    rejectUnauthorized: false
+  }
 };
 
 
