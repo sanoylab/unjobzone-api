@@ -5,7 +5,8 @@ const {auth} = require("../middleware/auth");
 const {
   getAll,
   getById, 
-  getFilteredJobs
+  getFilteredJobs,
+  getAllJobCategories
 } = require("../controllers/jobController");
 /**
  * @swagger
@@ -236,5 +237,24 @@ router.get("/:id", auth, getById);
  *                 $ref: '#/components/schemas/Job'
  */
 router.get("/filtered/:query", auth, getFilteredJobs);
+
+
+/**
+ * @swagger
+ * /api/v1/jobs/categories/list:
+ *   get:
+ *     summary: Returns the list of all the job categories
+ *     tags: [Job]
+ *     responses:
+ *       200:
+ *         description: The list of the job categories
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/Job'
+ */
+router.get("/categories/list",auth,  getAllJobCategories);
 
 module.exports = router;
