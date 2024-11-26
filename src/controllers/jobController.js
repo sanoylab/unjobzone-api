@@ -132,7 +132,7 @@ module.exports.getAllJobOrganizations = async (req, res) => {
     FROM job_vacancies
     WHERE dept IS NOT NULL AND dept <> ''
     GROUP BY dept
-    ORDER BY dept;
+    ORDER BY total DESC;
   `;
       let result = null;
     try {
