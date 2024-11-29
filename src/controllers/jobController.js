@@ -148,3 +148,29 @@ module.exports.getAllJobOrganizations = async (req, res) => {
     res.status(400).json({ success: false, message: err.message });
   }
 };
+
+
+
+module.exports.getAllDutyStations = async (req, res) => {
+  try {
+    let query = `
+    SELECT duty_station, COUNT(*) as total
+    FROM job_vacancies
+    WHERE duty_station IS NOT NULL AND duty_station <> ''
+    GROUP BY duty_station
+    ORDER BY total DESC;
+  `;
+      let result = null;
+    try {
+      result = await pool.query(query);
+      console.log(result);
+      console.log(result.rows);
+    } catch (e) {
+      console.log(e);
+    }
+    
+    res.status(200).json({ success: true, timestamp: new Date(), data: result.rows });
+  } catch (e) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+};

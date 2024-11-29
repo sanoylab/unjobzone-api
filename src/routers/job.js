@@ -7,7 +7,9 @@ const {
   getById, 
   getFilteredJobs,
   getAllJobCategories,
-  getAllJobOrganizations
+  getAllJobOrganizations,
+  getAllDutyStations
+
 } = require("../controllers/jobController");
 /**
  * @swagger
@@ -277,6 +279,27 @@ router.get("/categories/list",auth,  getAllJobCategories);
  *                 $ref: '#/components/schemas/Job'
  */
 router.get("/organizations/list",auth,  getAllJobOrganizations);
+
+
+
+
+/**
+ * @swagger
+ * /api/v1/jobs/duty_station/list:
+ *   get:
+ *     summary: Returns the list of all the duty station
+ *     tags: [Job]
+ *     responses:
+ *       200:
+ *         description: The list of the duty station
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/Job'
+ */
+router.get("/duty_station/list",auth,  getAllDutyStations);
 
 
 module.exports = router;
