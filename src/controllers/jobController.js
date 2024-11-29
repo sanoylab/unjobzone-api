@@ -53,6 +53,8 @@ module.exports.getById = async (req, res) => {
   }
 };
 
+
+
 module.exports.getFilteredJobs = async (req, res) => {
   try {
     let baseQuery = 'SELECT id, job_id, language, category_code, job_title, job_code_title, job_description, job_family_code, job_level, duty_station, recruitment_type, start_date, end_date, dept, total_count, jn, jf, jc, jl, created, data_source FROM job_vacancies WHERE 1=1';
@@ -62,14 +64,20 @@ module.exports.getFilteredJobs = async (req, res) => {
     // Dynamically construct the WHERE clause based on filters
     for (const [key, value] of Object.entries(req.query)) {
       if (key !== 'page' && key !== 'size') {
-        if (typeof value === 'string') {
-          baseQuery += ` AND ${key} ILIKE $${queryParams.length + 1}`;
-          countQuery += ` AND ${key} ILIKE $${queryParams.length + 1}`;
+        if (key === 'job_title') {
+          baseQuery += ` AND to_tsvector('english', ${key}) @@ to_tsquery('english', $${queryParams.length + 1})`;
+          countQuery += ` AND to_tsvector('english', ${key}) @@ to_tsquery('english', $${queryParams.length + 1})`;
+          queryParams.push(value.split(' ').join(' & '));
         } else {
-          baseQuery += ` AND ${key} = $${queryParams.length + 1}`;
-          countQuery += ` AND ${key} = $${queryParams.length + 1}`;
+          if (typeof value === 'string') {
+            baseQuery += ` AND ${key} ILIKE $${queryParams.length + 1}`;
+            countQuery += ` AND ${key} ILIKE $${queryParams.length + 1}`;
+          } else {
+            baseQuery += ` AND ${key} = $${queryParams.length + 1}`;
+            countQuery += ` AND ${key} = $${queryParams.length + 1}`;
+          }
+          queryParams.push(value);
         }
-        queryParams.push(value);
       }
     }
 
@@ -86,7 +94,6 @@ module.exports.getFilteredJobs = async (req, res) => {
     try {
       result = await pool.query(baseQuery, queryParams);
       countResult = await pool.query(countQuery, queryParams.slice(0, -2)); // Exclude pagination params for count query
-      
     } catch (e) {
       console.log(e);
       return res.status(500).json({ success: false, message: 'Database query error' });
@@ -124,7 +131,6 @@ module.exports.getAllJobCategories = async (req, res) => {
   }
 };
 
-
 module.exports.getAllJobOrganizations = async (req, res) => {
   try {
     let query = `
@@ -148,8 +154,6 @@ module.exports.getAllJobOrganizations = async (req, res) => {
     res.status(400).json({ success: false, message: err.message });
   }
 };
-
-
 
 module.exports.getAllDutyStations = async (req, res) => {
   try {

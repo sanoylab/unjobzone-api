@@ -190,6 +190,10 @@ router.get("/:id", auth, getById);
  *           type: string
  *         description: Duty Station
  *       - in: query
+ *         name: job_title
+ *         schema:
+ *           type: string
+ *       - in: query
  *         name: dept
  *         schema:
  *           type: string
@@ -241,7 +245,6 @@ router.get("/:id", auth, getById);
  */
 router.get("/filtered/:query", auth, getFilteredJobs);
 
-
 /**
  * @swagger
  * /api/v1/jobs/categories/list:
@@ -260,8 +263,6 @@ router.get("/filtered/:query", auth, getFilteredJobs);
  */
 router.get("/categories/list",auth,  getAllJobCategories);
 
-
-
 /**
  * @swagger
  * /api/v1/jobs/organizations/list:
@@ -279,8 +280,6 @@ router.get("/categories/list",auth,  getAllJobCategories);
  *                 $ref: '#/components/schemas/Job'
  */
 router.get("/organizations/list",auth,  getAllJobOrganizations);
-
-
 
 
 /**
