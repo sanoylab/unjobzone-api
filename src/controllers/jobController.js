@@ -237,12 +237,20 @@ module.exports.getAllJobCategories = async (req, res) => {
 module.exports.getAllJobOrganizations = async (req, res) => {
   try {
     let query = `
-    SELECT jv.dept, org.logo COUNT(jv.*) as total
-    FROM job_vacancies jv
-    INNER JOIN organization org ON jv.organization_id = org.id
-    WHERE jv.dept IS NOT NULL AND jv.dept <> ''
-    GROUP BY jv.dept
-    ORDER BY total DESC;
+    SELECT 
+      jv.dept, 
+      org.logo, 
+      COUNT(*) as total
+    FROM 
+      job_vacancies jv
+    INNER JOIN 
+      organization org ON jv.organization_id = org.id
+    WHERE 
+      jv.dept IS NOT NULL AND jv.dept <> ''
+    GROUP BY 
+      jv.dept, org.logo
+    ORDER BY 
+      total DESC;
   `;
       let result = null;
     try {
