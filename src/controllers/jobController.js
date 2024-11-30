@@ -10,8 +10,45 @@ module.exports.getAll = async (req, res) => {
     const page = req.query.page || 1;
     const size = req.query.size || 10;
 
-    let query = `SELECT id, job_id, language, category_code, job_title, job_code_title, job_description, job_family_code, job_level, duty_station, recruitment_type, start_date, end_date, dept, total_count, jn, jf, jc, jl, created, data_source 
-	 FROM job_vacancies order by id LIMIT ${size}  OFFSET ((${page} - 1) * ${size});`;
+    let query = `
+  SELECT 
+    jv.id, 
+    jv.job_id, 
+    jv.language, 
+    jv.category_code, 
+    jv.job_title, 
+    jv.job_code_title, 
+    jv.job_description, 
+    jv.job_family_code, 
+    jv.job_level, 
+    jv.duty_station, 
+    jv.recruitment_type, 
+    jv.start_date, 
+    jv.end_date, 
+    jv.dept, 
+    jv.total_count, 
+    jv.jn, 
+    jv.jf, 
+    jv.jc, 
+    jv.jl, 
+    jv.created, 
+    jv.data_source,
+    org.logo,
+    org.short_name,
+    org.long_name
+  FROM 
+    job_vacancies jv
+  JOIN 
+    organization org ON jv.organization_id = org.id
+  ORDER BY 
+    jv.id 
+  LIMIT 
+    ${size} 
+  OFFSET 
+    ((${page} - 1) * ${size});
+`;
+
+
 
     let result = null;
 
@@ -57,8 +94,39 @@ module.exports.getById = async (req, res) => {
 
 module.exports.getFilteredJobs = async (req, res) => {
   try {
-    let baseQuery = 'SELECT id, job_id, language, category_code, job_title, job_code_title, job_description, job_family_code, job_level, duty_station, recruitment_type, start_date, end_date, dept, total_count, jn, jf, jc, jl, created, data_source FROM job_vacancies WHERE 1=1';
-    let countQuery = 'SELECT COUNT(*) FROM job_vacancies WHERE 1=1';
+    let baseQuery = `
+    SELECT 
+      jv.id, 
+      jv.job_id, 
+      jv.language, 
+      jv.category_code, 
+      jv.job_title, 
+      jv.job_code_title, 
+      jv.job_description, 
+      jv.job_family_code, 
+      jv.job_level, 
+      jv.duty_station, 
+      jv.recruitment_type, 
+      jv.start_date, 
+      jv.end_date, 
+      jv.dept, 
+      jv.total_count, 
+      jv.jn, 
+      jv.jf, 
+      jv.jc, 
+      jv.jl, 
+      jv.created, 
+      jv.data_source,
+      org.logo,
+      org.short_name,
+      org.long_name
+    FROM 
+      job_vacancies jv
+    JOIN 
+      organization org ON jv.organization_id = org.id
+    WHERE 
+      1=1
+  `;    let countQuery = 'SELECT COUNT(*) FROM job_vacancies WHERE 1=1';
     const queryParams = [];
 
     // Dynamically construct the WHERE clause based on filters
