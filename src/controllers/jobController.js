@@ -75,10 +75,45 @@ module.exports.getAll = async (req, res) => {
 
 module.exports.getById = async (req, res) => {
   try {
-    let query = `SELECT  id, job_id, language, category_code, job_title, job_code_title, job_description, job_family_code, job_level, duty_station, recruitment_type, start_date, end_date, dept, total_count, jn, jf, jc, jl, created, data_source FROM job_vacancies WHERE id=${req.params.id} order by id;`;
-    let result = null;
+    const query = `
+    SELECT 
+      jv.id, 
+      jv.job_id, 
+      jv.language, 
+      jv.category_code, 
+      jv.job_title, 
+      jv.job_code_title, 
+      jv.job_description, 
+      jv.job_family_code, 
+      jv.job_level, 
+      jv.duty_station, 
+      jv.recruitment_type, 
+      jv.start_date, 
+      jv.end_date, 
+      jv.dept, 
+      jv.total_count, 
+      jv.jn, 
+      jv.jf, 
+      jv.jc, 
+      jv.jl, 
+      jv.created, 
+      jv.data_source,
+      org.logo,
+      org.short_name,
+      org.long_name
+    FROM 
+      job_vacancies jv
+    JOIN 
+      organization org ON jv.organization_id = org.id
+    WHERE 
+      jv.id = $1
+    ORDER BY 
+      jv.id;
+  `;   
+  const values = [req.params.id];
+  let result = null;
     try {
-      result = await pool.query(query);
+      result = await pool.query(query, values);
       console.log(result.rows);
     } catch (e) {
       console.log(e);
