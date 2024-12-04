@@ -49,6 +49,17 @@ const {
  *   get:
  *     summary: Returns the list of all the blogs
  *     tags: [Blog]
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *         description: The number of jobs to skip before starting to collect the result
+ *       - in: query
+ *         name: size
+ *         schema:
+ *           type: integer
+ *         description: The number of jobs to return
  *     responses:
  *       200:
  *         description: The list of the blogs

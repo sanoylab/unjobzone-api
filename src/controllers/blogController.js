@@ -7,7 +7,8 @@ const pool = new Pool(credentials);
 
 module.exports.getAll = async (req, res) => {
   try {
-    
+    const page = req.query.page || 1;
+    const size = req.query.size || 10;
 
     let query = `
   SELECT 
@@ -18,7 +19,11 @@ module.exports.getAll = async (req, res) => {
     featured
    
   FROM 
-    blog;
+    blog
+  LIMIT 
+    ${size} 
+  OFFSET 
+    ((${page} - 1) * ${size});
 `;
 
 
@@ -41,7 +46,7 @@ module.exports.getAll = async (req, res) => {
     const totalRecords = parseInt(countResult.rows[0].count, 10);
 
     res.status(200).json({ success: true, totalRecords, timestamp: new Date(), data: result.rows });
-  } catch (e) {
+  } catch (err) {
     res.status(400).json({ success: false, message: err.message });
   }
 };
