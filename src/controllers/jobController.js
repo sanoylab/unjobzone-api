@@ -33,6 +33,7 @@ module.exports.getAll = async (req, res) => {
     jv.jl, 
     jv.created, 
     jv.data_source,
+    jv.apply_link,
     org.logo,
     org.short_name,
     org.long_name
@@ -91,6 +92,7 @@ module.exports.getById = async (req, res) => {
       jv.start_date, 
       jv.end_date, 
       jv.dept, 
+      jv.apply_link,
       jv.total_count, 
       jv.jn, 
       jv.jf, 
@@ -98,6 +100,7 @@ module.exports.getById = async (req, res) => {
       jv.jl, 
       jv.created, 
       jv.data_source,
+      jv.apply_link,
       org.logo,
       org.short_name,
       org.long_name
@@ -145,6 +148,7 @@ module.exports.getFilteredJobs = async (req, res) => {
       jv.start_date, 
       jv.end_date, 
       jv.dept, 
+      jv.apply_link,
       jv.total_count, 
       jv.jn, 
       jv.jf, 
