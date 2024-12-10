@@ -299,17 +299,9 @@ module.exports.getAllJobOrganizations = async (req, res) => {
 module.exports.getLogoJobOrganizations = async (req, res) => {
   try {
     let query = `
-     SELECT 
-      jv.dept, 
-      org.logo
-    FROM 
-      job_vacancies jv
-    INNER JOIN 
-      (SELECT DISTINCT id, logo FROM organization) org ON jv.organization_id = org.id
-    WHERE 
-      jv.dept IS NOT NULL AND jv.dept <> ''
-    GROUP BY 
-      jv.dept, org.logo;
+    SELECT DISTINCT logo, name
+FROM organization
+    
   `;
       let result = null;
     try {
