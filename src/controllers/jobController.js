@@ -295,6 +295,37 @@ module.exports.getAllJobOrganizations = async (req, res) => {
   }
 };
 
+
+module.exports.getLogoJobOrganizations = async (req, res) => {
+  try {
+    let query = `
+     SELECT 
+      jv.dept, 
+      org.logo
+    FROM 
+      job_vacancies jv
+    INNER JOIN 
+      (SELECT DISTINCT id, logo FROM organization) org ON jv.organization_id = org.id
+    WHERE 
+      jv.dept IS NOT NULL AND jv.dept <> ''
+    GROUP BY 
+      jv.dept, org.logo;
+  `;
+      let result = null;
+    try {
+      result = await pool.query(query);
+      console.log(result);
+      console.log(result.rows);
+    } catch (e) {
+      console.log(e);
+    }
+    
+    res.status(200).json({ success: true, timestamp: new Date(), data: result.rows });
+  } catch (e) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+};
+
 module.exports.getAllDutyStations = async (req, res) => {
   try {
     let query = `

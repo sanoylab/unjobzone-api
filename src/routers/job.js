@@ -9,7 +9,8 @@ const {
   getAllJobCategories,
   getAllJobOrganizations,
   getAllJobFunctionCategories,
-  getAllDutyStations
+  getAllDutyStations,
+  getLogoJobOrganizations
 
 } = require("../controllers/jobController");
 /**
@@ -302,6 +303,26 @@ router.get("/categories/job_function/list",auth,  getAllJobFunctionCategories);
  *                 $ref: '#/components/schemas/Job'
  */
 router.get("/organizations/list",auth,  getAllJobOrganizations);
+
+
+
+/**
+ * @swagger
+ * /api/v1/jobs/organizations/logo/list:
+ *   get:
+ *     summary: Returns the list of all the job organizations Logo
+ *     tags: [Job]
+ *     responses:
+ *       200:
+ *         description: The list of the job organizations
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/Job'
+ */
+router.get("/organizations/logo/list",auth,  getLogoJobOrganizations);
 
 
 /**
