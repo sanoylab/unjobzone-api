@@ -299,8 +299,8 @@ module.exports.getAllJobOrganizations = async (req, res) => {
 module.exports.getLogoJobOrganizations = async (req, res) => {
   try {
     let query = `
-    SELECT DISTINCT logo, name
-FROM organization
+    SELECT DISTINCT org.logo, org.name
+FROM organization org INNER JOIN job_vacancies jv ON org.id = jv.organization_id
     
   `;
       let result = null;
