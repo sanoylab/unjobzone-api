@@ -163,11 +163,10 @@ module.exports.getFilteredJobs = async (req, res) => {
       job_vacancies jv
     JOIN 
       organization org ON jv.organization_id = org.id
-    ORDER BY
-      jv.end_date ASC
     WHERE 
       1=1
-  `;    let countQuery = 'SELECT COUNT(*) FROM job_vacancies WHERE 1=1';
+  `;   
+   let countQuery = 'SELECT COUNT(*) FROM job_vacancies WHERE 1=1';
     const queryParams = [];
 
     // Dynamically construct the WHERE clause based on filters
@@ -194,7 +193,7 @@ module.exports.getFilteredJobs = async (req, res) => {
     const page = req.query.page || 1;
     const size = req.query.size || 10;
     const offset = (page - 1) * size;
-    baseQuery += ` ORDER BY id LIMIT $${queryParams.length + 1} OFFSET $${queryParams.length + 2}`;
+    baseQuery += ` ORDER BY end_date ASC LIMIT $${queryParams.length + 1} OFFSET $${queryParams.length + 2}`;
     queryParams.push(size, offset);
 
     let result = null;
