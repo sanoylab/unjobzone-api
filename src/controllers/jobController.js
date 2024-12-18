@@ -42,7 +42,7 @@ module.exports.getAll = async (req, res) => {
   JOIN 
     organization org ON jv.organization_id = org.id
   ORDER BY 
-    jv.id 
+    jv.end_date ASC
   LIMIT 
     ${size} 
   OFFSET 
@@ -111,7 +111,7 @@ module.exports.getById = async (req, res) => {
     WHERE 
       jv.id = $1
     ORDER BY 
-      jv.id;
+      jv.end_date ASC;
   `;   
   const values = [req.params.id];
   let result = null;
@@ -163,6 +163,8 @@ module.exports.getFilteredJobs = async (req, res) => {
       job_vacancies jv
     JOIN 
       organization org ON jv.organization_id = org.id
+    ORDER BY
+      jv.end_date ASC
     WHERE 
       1=1
   `;    let countQuery = 'SELECT COUNT(*) FROM job_vacancies WHERE 1=1';
