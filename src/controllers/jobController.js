@@ -2,6 +2,7 @@ const e = require("express");
 const { Pool } = require("pg");
 require("dotenv").config();
 const { credentials } = require("../util/db");
+const redisClient = require('../redisClient');
 
 const pool = new Pool(credentials);
 
@@ -9,47 +10,52 @@ module.exports.getAll = async (req, res) => {
   try {
     const page = req.query.page || 1;
     const size = req.query.size || 10;
+    const cacheKey = `jobs:all:${page}:${size}`;
+
+    // Check if data is in cache
+    let cachedData = await redisClient.get(cacheKey);
+    if (cachedData) {
+      return res.json(JSON.parse(cachedData));
+    }
 
     let query = `
-  SELECT 
-    jv.id, 
-    jv.job_id, 
-    jv.language, 
-    jv.category_code, 
-    jv.job_title, 
-    jv.job_code_title, 
-    jv.job_description, 
-    jv.job_family_code, 
-    jv.job_level, 
-    jv.duty_station, 
-    jv.recruitment_type, 
-    jv.start_date, 
-    jv.end_date, 
-    jv.dept, 
-    jv.total_count, 
-    jv.jn, 
-    jv.jf, 
-    jv.jc, 
-    jv.jl, 
-    jv.created, 
-    jv.data_source,
-    jv.apply_link,
-    org.logo,
-    org.short_name,
-    org.long_name
-  FROM 
-    job_vacancies jv
-  JOIN 
-    organization org ON jv.organization_id = org.id
-  ORDER BY 
-    jv.end_date ASC
-  LIMIT 
-    ${size} 
-  OFFSET 
-    ((${page} - 1) * ${size});
-`;
-
-
+      SELECT 
+        jv.id, 
+        jv.job_id, 
+        jv.language, 
+        jv.category_code, 
+        jv.job_title, 
+        jv.job_code_title, 
+        jv.job_description, 
+        jv.job_family_code, 
+        jv.job_level, 
+        jv.duty_station, 
+        jv.recruitment_type, 
+        jv.start_date, 
+        jv.end_date, 
+        jv.dept, 
+        jv.total_count, 
+        jv.jn, 
+        jv.jf, 
+        jv.jc, 
+        jv.jl, 
+        jv.created, 
+        jv.data_source,
+        jv.apply_link,
+        org.logo,
+        org.short_name,
+        org.long_name
+      FROM 
+        job_vacancies jv
+      JOIN 
+        organization org ON jv.organization_id = org.id
+      ORDER BY 
+        jv.end_date ASC
+      LIMIT 
+        ${size} 
+      OFFSET 
+        ((${page} - 1) * ${size});
+    `;
 
     let result = null;
 
@@ -57,116 +63,128 @@ module.exports.getAll = async (req, res) => {
     let countQuery = 'SELECT COUNT(*) FROM job_vacancies';
     let countResult = null;
 
-
-
     try {
       result = await pool.query(query);
       countResult = await pool.query(countQuery);
-
     } catch (e) {
       console.log(e);
-    }   
+    }
+
     const totalRecords = parseInt(countResult.rows[0].count, 10);
+
+    // Cache the result
+    await redisClient.set(cacheKey, JSON.stringify({ success: true, totalRecords, timestamp: new Date(), data: result.rows }), 'EX', 3600); // Cache for 1 hour
 
     res.status(200).json({ success: true, totalRecords, timestamp: new Date(), data: result.rows });
   } catch (e) {
-    res.status(400).json({ success: false, message: err.message });
+    res.status(400).json({ success: false, message: e.message });
   }
 };
 
 module.exports.getById = async (req, res) => {
   try {
+    const cacheKey = `jobs:${req.params.id}`;
+
+    // Check if data is in cache
+    let cachedData = await redisClient.get(cacheKey);
+    if (cachedData) {
+      return res.json(JSON.parse(cachedData));
+    }
+
     const query = `
-    SELECT 
-      jv.id, 
-      jv.job_id, 
-      jv.language, 
-      jv.category_code, 
-      jv.job_title, 
-      jv.job_code_title, 
-      jv.job_description, 
-      jv.job_family_code, 
-      jv.job_level, 
-      jv.duty_station, 
-      jv.recruitment_type, 
-      jv.start_date, 
-      jv.end_date, 
-      jv.dept, 
-      jv.apply_link,
-      jv.total_count, 
-      jv.jn, 
-      jv.jf, 
-      jv.jc, 
-      jv.jl, 
-      jv.created, 
-      jv.data_source,
-      jv.apply_link,
-      org.logo,
-      org.short_name,
-      org.long_name
-    FROM 
-      job_vacancies jv
-    JOIN 
-      organization org ON jv.organization_id = org.id
-    WHERE 
-      jv.id = $1
-    ORDER BY 
-      jv.end_date ASC;
-  `;   
-  const values = [req.params.id];
-  let result = null;
+      SELECT 
+        jv.id, 
+        jv.job_id, 
+        jv.language, 
+        jv.category_code, 
+        jv.job_title, 
+        jv.job_code_title, 
+        jv.job_description, 
+        jv.job_family_code, 
+        jv.job_level, 
+        jv.duty_station, 
+        jv.recruitment_type, 
+        jv.start_date, 
+        jv.end_date, 
+        jv.dept, 
+        jv.apply_link,
+        jv.total_count, 
+        jv.jn, 
+        jv.jf, 
+        jv.jc, 
+        jv.jl, 
+        jv.created, 
+        jv.data_source,
+        jv.apply_link,
+        org.logo,
+        org.short_name,
+        org.long_name
+      FROM 
+        job_vacancies jv
+      JOIN 
+        organization org ON jv.organization_id = org.id
+      WHERE 
+        jv.id = $1
+      ORDER BY 
+        jv.end_date ASC;
+    `;
+
+    const values = [req.params.id];
+    let result = null;
     try {
       result = await pool.query(query, values);
       console.log(result.rows);
     } catch (e) {
       console.log(e);
     }
-    
+
+    // Cache the result
+    await redisClient.set(cacheKey, JSON.stringify({ success: true, timestamp: new Date(), data: result.rows }), 'EX', 3600); // Cache for 1 hour
+
     res.status(200).json({ success: true, timestamp: new Date(), data: result.rows });
   } catch (e) {
-    res.status(400).json({ success: false, message: err.message });
+    res.status(400).json({ success: false, message: e.message });
   }
 };
-
-
 
 module.exports.getFilteredJobs = async (req, res) => {
   try {
     let baseQuery = `
-    SELECT 
-      jv.id, 
-      jv.job_id, 
-      jv.language, 
-      jv.category_code, 
-      jv.job_title, 
-      jv.job_code_title, 
-      jv.job_description, 
-      jv.job_family_code, 
-      jv.job_level, 
-      jv.duty_station, 
-      jv.recruitment_type, 
-      jv.start_date, 
-      jv.end_date, 
-      jv.dept, 
-      jv.apply_link,
-      jv.total_count, 
-      jv.jn, 
-      jv.jf, 
-      jv.jc, 
-      jv.jl, 
-      jv.created, 
-      jv.data_source,
-      org.logo,
-      org.short_name,
-      org.long_name
-    FROM 
-      job_vacancies jv
-    JOIN 
-      organization org ON jv.organization_id = org.id
-    WHERE 
-      1=1
-  `;   
-   let countQuery = 'SELECT COUNT(*) FROM job_vacancies WHERE 1=1';
+      SELECT 
+        jv.id, 
+        jv.job_id, 
+        jv.language, 
+        jv.category_code, 
+        jv.job_title, 
+        jv.job_code_title, 
+        jv.job_description, 
+        jv.job_family_code, 
+        jv.job_level, 
+        jv.duty_station, 
+        jv.recruitment_type, 
+        jv.start_date, 
+        jv.end_date, 
+        jv.dept, 
+        jv.apply_link,
+        jv.total_count, 
+        jv.jn, 
+        jv.jf, 
+        jv.jc, 
+        jv.jl, 
+        jv.created, 
+        jv.data_source,
+        org.logo,
+        org.short_name,
+        org.long_name
+      FROM 
+        job_vacancies jv
+      JOIN 
+        organization org ON jv.organization_id = org.id
+      WHERE 
+        1=1
+    `;
+
+    let countQuery = 'SELECT COUNT(*) FROM job_vacancies WHERE 1=1';
     const queryParams = [];
 
     // Dynamically construct the WHERE clause based on filters
@@ -218,13 +236,13 @@ module.exports.getFilteredJobs = async (req, res) => {
 module.exports.getAllJobCategories = async (req, res) => {
   try {
     let query = `
-    SELECT jn, COUNT(*) as total
-    FROM job_vacancies
-    WHERE jn IS NOT NULL AND jn <> ''
-    GROUP BY jn
-    ORDER BY jn;
-  `;
-      let result = null;
+      SELECT jn, COUNT(*) as total
+      FROM job_vacancies
+      WHERE jn IS NOT NULL AND jn <> ''
+      GROUP BY jn
+      ORDER BY jn;
+    `;
+    let result = null;
     try {
       result = await pool.query(query);
       console.log(result);
@@ -232,23 +250,23 @@ module.exports.getAllJobCategories = async (req, res) => {
     } catch (e) {
       console.log(e);
     }
-    
+
     res.status(200).json({ success: true, timestamp: new Date(), data: result.rows });
   } catch (e) {
-    res.status(400).json({ success: false, message: err.message });
+    res.status(400).json({ success: false, message: e.message });
   }
 };
 
 module.exports.getAllJobFunctionCategories = async (req, res) => {
   try {
     let query = `
-    SELECT jf, COUNT(*) as total
-    FROM job_vacancies
-    WHERE jf IS NOT NULL AND jf <> ''
-    GROUP BY jf
-    ORDER BY jf;
-  `;
-      let result = null;
+      SELECT jf, COUNT(*) as total
+      FROM job_vacancies
+      WHERE jf IS NOT NULL AND jf <> ''
+      GROUP BY jf
+      ORDER BY jf;
+    `;
+    let result = null;
     try {
       result = await pool.query(query);
       console.log(result);
@@ -256,32 +274,32 @@ module.exports.getAllJobFunctionCategories = async (req, res) => {
     } catch (e) {
       console.log(e);
     }
-    
+
     res.status(200).json({ success: true, timestamp: new Date(), data: result.rows });
   } catch (e) {
-    res.status(400).json({ success: false, message: err.message });
+    res.status(400).json({ success: false, message: e.message });
   }
 };
 
 module.exports.getAllJobOrganizations = async (req, res) => {
   try {
     let query = `
-    SELECT 
-      jv.dept, 
-      org.logo, 
-      COUNT(*) as total
-    FROM 
-      job_vacancies jv
-    INNER JOIN 
-      organization org ON jv.organization_id = org.id
-    WHERE 
-      jv.dept IS NOT NULL AND jv.dept <> ''
-    GROUP BY 
-      jv.dept, org.logo
-    ORDER BY 
-      total DESC;
-  `;
-      let result = null;
+      SELECT 
+        jv.dept, 
+        org.logo, 
+        COUNT(*) as total
+      FROM 
+        job_vacancies jv
+      INNER JOIN 
+        organization org ON jv.organization_id = org.id
+      WHERE 
+        jv.dept IS NOT NULL AND jv.dept <> ''
+      GROUP BY 
+        jv.dept, org.logo
+      ORDER BY 
+        total DESC;
+    `;
+    let result = null;
     try {
       result = await pool.query(query);
       console.log(result);
@@ -289,22 +307,21 @@ module.exports.getAllJobOrganizations = async (req, res) => {
     } catch (e) {
       console.log(e);
     }
-    
+
     res.status(200).json({ success: true, timestamp: new Date(), data: result.rows });
   } catch (e) {
-    res.status(400).json({ success: false, message: err.message });
+    res.status(400).json({ success: false, message: e.message });
   }
 };
-
 
 module.exports.getLogoJobOrganizations = async (req, res) => {
   try {
     let query = `
-    SELECT DISTINCT org.logo, org.name
-FROM organization org INNER JOIN job_vacancies jv ON org.id = jv.organization_id
-    
-  `;
-      let result = null;
+      SELECT DISTINCT org.logo, org.name
+      FROM organization org 
+      INNER JOIN job_vacancies jv ON org.id = jv.organization_id
+    `;
+    let result = null;
     try {
       result = await pool.query(query);
       console.log(result);
@@ -312,23 +329,23 @@ FROM organization org INNER JOIN job_vacancies jv ON org.id = jv.organization_id
     } catch (e) {
       console.log(e);
     }
-    
+
     res.status(200).json({ success: true, timestamp: new Date(), data: result.rows });
   } catch (e) {
-    res.status(400).json({ success: false, message: err.message });
+    res.status(400).json({ success: false, message: e.message });
   }
 };
 
 module.exports.getAllDutyStations = async (req, res) => {
   try {
     let query = `
-    SELECT duty_station, COUNT(*) as total
-    FROM job_vacancies
-    WHERE duty_station IS NOT NULL AND duty_station <> ''
-    GROUP BY duty_station
-    ORDER BY total DESC;
-  `;
-      let result = null;
+      SELECT duty_station, COUNT(*) as total
+      FROM job_vacancies
+      WHERE duty_station IS NOT NULL AND duty_station <> ''
+      GROUP BY duty_station
+      ORDER BY total DESC;
+    `;
+    let result = null;
     try {
       result = await pool.query(query);
       console.log(result);
@@ -336,9 +353,9 @@ module.exports.getAllDutyStations = async (req, res) => {
     } catch (e) {
       console.log(e);
     }
-    
+
     res.status(200).json({ success: true, timestamp: new Date(), data: result.rows });
   } catch (e) {
-    res.status(400).json({ success: false, message: err.message });
+    res.status(400).json({ success: false, message: e.message });
   }
 };
