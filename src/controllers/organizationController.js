@@ -10,8 +10,7 @@ module.exports.getAll = async (req, res) => {
     const page = req.query.page || 1;
     const size = req.query.size || 10;
 
-    let query = `SELECT id, organization_type, logo, banner, short_name, long_name, headquarters, founded,
-    about, website_url, twitter_url, facebook_url FROM organization order by id LIMIT ${size}  OFFSET ((${page} - 1) * ${size});`;
+    let query = `SELECT id, code, logo, name, short_name, description, url, long_name FROM organization order by id LIMIT ${size}  OFFSET ((${page} - 1) * ${size});`;
 
     let result = null;
 
@@ -38,8 +37,7 @@ module.exports.getAll = async (req, res) => {
 
 module.exports.getById = async (req, res) => {
   try {
-    let query = `SELECT  id, organization_type, logo, banner, short_name, long_name, headquarters, founded,
-    about, website_url, twitter_url, facebook_url FROM organization WHERE id=${req.params.id} order by id;`;
+    let query = `SELECT  id, code, logo, name, short_name, description, url, long_name FROM organization WHERE id=${req.params.id} order by id;`;
     let result = null;
     try {
       result = await pool.query(query);
