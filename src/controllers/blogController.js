@@ -11,8 +11,7 @@ module.exports.getAll = async (req, res) => {
     const page = req.query.page || 1;
     const size = req.query.size || 10;
     const cacheKey = `blogs:all:${page}:${size}`;
- // Remove the cache
- //await redisClient.del(cacheKey);
+
     // Check if data is in cache
     let cachedData = await redisClient.get(cacheKey);
     if (cachedData) {
@@ -42,7 +41,6 @@ module.exports.getAll = async (req, res) => {
 
     try {
       result = await pool.query(query);
-     
       countResult = await pool.query(countQuery);
       console.log(countQuery);
     } catch (e) {
@@ -51,8 +49,8 @@ module.exports.getAll = async (req, res) => {
 
     const totalRecords = parseInt(countResult.rows[0].count, 10);
 
-    // Cache the result
-    await redisClient.set(cacheKey, JSON.stringify({ success: true, totalRecords, timestamp: new Date(), data: result.rows }), 'EX', 3600); // Cache for 1 hour
+    // Cache the result with a shorter expiration time
+    await redisClient.set(cacheKey, JSON.stringify({ success: true, totalRecords, timestamp: new Date(), data: result.rows }), 'EX', 600); // Cache for 10 minutes
 
     res.status(200).json({ success: true, totalRecords, timestamp: new Date(), data: result.rows });
   } catch (err) {
@@ -92,8 +90,8 @@ module.exports.getById = async (req, res) => {
       console.log(e);
     }
 
-    // Cache the result
-    await redisClient.set(cacheKey, JSON.stringify({ success: true, timestamp: new Date(), data: result.rows }), 'EX', 3600); // Cache for 1 hour
+    // Cache the result with a shorter expiration time
+    await redisClient.set(cacheKey, JSON.stringify({ success: true, timestamp: new Date(), data: result.rows }), 'EX', 600); // Cache for 10 minutes
 
     res.status(200).json({ success: true, timestamp: new Date(), data: result.rows });
   } catch (e) {
@@ -132,10 +130,71 @@ module.exports.getFeaturedBlog = async (req, res) => {
       console.log(e);
     }
 
-    // Cache the result
-    await redisClient.set(cacheKey, JSON.stringify({ success: true, timestamp: new Date(), data: result.rows }), 'EX', 3600); // Cache for 1 hour
+    // Cache the result with a shorter expiration time
+    await redisClient.set(cacheKey, JSON.stringify({ success: true, timestamp: new Date(), data: result.rows }), 'EX', 600); // Cache for 10 minutes
 
     res.status(200).json({ success: true, timestamp: new Date(), data: result.rows });
+  } catch (e) {
+    res.status(400).json({ success: false, message: e.message });
+  }
+};
+
+module.exports.addBlog = async (req, res) => {
+  try {
+    const { thumbnail, title, content, featured } = req.body;
+    const query = `
+      INSERT INTO blog (thumbnail, title, content, featured)
+      VALUES ($1, $2, $3, $4)
+      RETURNING *;
+    `;
+    const values = [thumbnail, title, content, featured];
+    let result = null;
+
+    try {
+      result = await pool.query(query, values);
+      console.log(result.rows);
+    } catch (e) {
+      console.log(e);
+      return res.status(400).json({ success: false, message: e.message });
+    }
+
+    // Invalidate the cache
+    await redisClient.del('blogs:all:*');
+    await redisClient.del('blogs:featured');
+
+    res.status(201).json({ success: true, data: result.rows[0] });
+  } catch (e) {
+    res.status(400).json({ success: false, message: e.message });
+  }
+};
+
+module.exports.updateBlog = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { thumbnail, title, content, featured } = req.body;
+    const query = `
+      UPDATE blog
+      SET thumbnail = $1, title = $2, content = $3, featured = $4
+      WHERE id = $5
+      RETURNING *;
+    `;
+    const values = [thumbnail, title, content, featured, id];
+    let result = null;
+
+    try {
+      result = await pool.query(query, values);
+      console.log(result.rows);
+    } catch (e) {
+      console.log(e);
+      return res.status(400).json({ success: false, message: e.message });
+    }
+
+    // Invalidate the cache
+    await redisClient.del(`blogs:${id}`);
+    await redisClient.del('blogs:all:*');
+    await redisClient.del('blogs:featured');
+
+    res.status(200).json({ success: true, data: result.rows[0] });
   } catch (e) {
     res.status(400).json({ success: false, message: e.message });
   }
