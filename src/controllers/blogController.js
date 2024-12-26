@@ -11,7 +11,8 @@ module.exports.getAll = async (req, res) => {
     const page = req.query.page || 1;
     const size = req.query.size || 10;
     const cacheKey = `blogs:all:${page}:${size}`;
-
+ // Remove the cache
+ //await redisClient.del(cacheKey);
     // Check if data is in cache
     let cachedData = await redisClient.get(cacheKey);
     if (cachedData) {
@@ -41,7 +42,9 @@ module.exports.getAll = async (req, res) => {
 
     try {
       result = await pool.query(query);
+     
       countResult = await pool.query(countQuery);
+      console.log(countQuery);
     } catch (e) {
       console.log(e);
     }
