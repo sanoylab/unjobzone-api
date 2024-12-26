@@ -2,7 +2,6 @@ const e = require("express");
 const { Pool } = require("pg");
 require("dotenv").config();
 const { credentials } = require("../util/db");
-const redisClient = require('../redisClient');
 
 const pool = new Pool(credentials);
 
@@ -10,13 +9,6 @@ module.exports.getAll = async (req, res) => {
   try {
     const page = req.query.page || 1;
     const size = req.query.size || 10;
-    const cacheKey = `blogs:all:${page}:${size}`;
-
-    // Check if data is in cache
-    let cachedData = await redisClient.get(cacheKey);
-    if (cachedData) {
-      return res.json(JSON.parse(cachedData));
-    }
 
     let query = `
       SELECT 
@@ -49,9 +41,6 @@ module.exports.getAll = async (req, res) => {
 
     const totalRecords = parseInt(countResult.rows[0].count, 10);
 
-    // Cache the result with a shorter expiration time
-    await redisClient.set(cacheKey, JSON.stringify({ success: true, totalRecords, timestamp: new Date(), data: result.rows }), 'EX', 600); // Cache for 10 minutes
-
     res.status(200).json({ success: true, totalRecords, timestamp: new Date(), data: result.rows });
   } catch (err) {
     res.status(400).json({ success: false, message: err.message });
@@ -60,14 +49,6 @@ module.exports.getAll = async (req, res) => {
 
 module.exports.getById = async (req, res) => {
   try {
-    const cacheKey = `blogs:${req.params.id}`;
-
-    // Check if data is in cache
-    let cachedData = await redisClient.get(cacheKey);
-    if (cachedData) {
-      return res.json(JSON.parse(cachedData));
-    }
-
     const query = `
       SELECT 
         id,
@@ -90,9 +71,6 @@ module.exports.getById = async (req, res) => {
       console.log(e);
     }
 
-    // Cache the result with a shorter expiration time
-    await redisClient.set(cacheKey, JSON.stringify({ success: true, timestamp: new Date(), data: result.rows }), 'EX', 600); // Cache for 10 minutes
-
     res.status(200).json({ success: true, timestamp: new Date(), data: result.rows });
   } catch (e) {
     res.status(400).json({ success: false, message: e.message });
@@ -101,14 +79,6 @@ module.exports.getById = async (req, res) => {
 
 module.exports.getFeaturedBlog = async (req, res) => {
   try {
-    const cacheKey = `blogs:featured`;
-
-    // Check if data is in cache
-    let cachedData = await redisClient.get(cacheKey);
-    if (cachedData) {
-      return res.json(JSON.parse(cachedData));
-    }
-
     const query = `
       SELECT 
         id,
@@ -129,9 +99,6 @@ module.exports.getFeaturedBlog = async (req, res) => {
     } catch (e) {
       console.log(e);
     }
-
-    // Cache the result with a shorter expiration time
-    await redisClient.set(cacheKey, JSON.stringify({ success: true, timestamp: new Date(), data: result.rows }), 'EX', 600); // Cache for 10 minutes
 
     res.status(200).json({ success: true, timestamp: new Date(), data: result.rows });
   } catch (e) {
@@ -157,10 +124,6 @@ module.exports.addBlog = async (req, res) => {
       console.log(e);
       return res.status(400).json({ success: false, message: e.message });
     }
-
-    // Invalidate the cache
-    await redisClient.del('blogs:all:*');
-    await redisClient.del('blogs:featured');
 
     res.status(201).json({ success: true, data: result.rows[0] });
   } catch (e) {
@@ -188,11 +151,6 @@ module.exports.updateBlog = async (req, res) => {
       console.log(e);
       return res.status(400).json({ success: false, message: e.message });
     }
-
-    // Invalidate the cache
-    await redisClient.del(`blogs:${id}`);
-    await redisClient.del('blogs:all:*');
-    await redisClient.del('blogs:featured');
 
     res.status(200).json({ success: true, data: result.rows[0] });
   } catch (e) {
