@@ -286,6 +286,7 @@ module.exports.getAllJobOrganizations = async (req, res) => {
     let query = `
       SELECT 
         jv.dept, 
+        org.description,
         org.logo, 
         COUNT(*) as total
       FROM 
@@ -295,7 +296,7 @@ module.exports.getAllJobOrganizations = async (req, res) => {
       WHERE 
         jv.dept IS NOT NULL AND jv.dept <> ''
       GROUP BY 
-        jv.dept, org.logo
+        jv.dept, org.logo, org.description
       ORDER BY 
         total DESC;
     `;
