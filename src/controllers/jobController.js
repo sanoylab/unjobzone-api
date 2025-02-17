@@ -150,7 +150,7 @@ module.exports.getById = async (req, res) => {
 module.exports.getFilteredJobs = async (req, res) => {
   try {
     let baseQuery = `
-      SELECT 
+      SELECT DISTINCT
         jv.id, 
         jv.job_id, 
         jv.language, 
@@ -184,7 +184,7 @@ module.exports.getFilteredJobs = async (req, res) => {
         1=1
     `;
 
-    let countQuery = 'SELECT COUNT(*) FROM job_vacancies WHERE 1=1';
+    let countQuery = 'SELECT COUNT(DISTINCT jv.id) FROM job_vacancies jv JOIN organization org ON jv.organization_id = org.id WHERE 1=1';
     const queryParams = [];
 
     // Dynamically construct the WHERE clause based on filters
