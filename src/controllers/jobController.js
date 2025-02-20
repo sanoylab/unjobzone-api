@@ -149,8 +149,9 @@ module.exports.getById = async (req, res) => {
 
 module.exports.getFilteredJobs = async (req, res) => {
   try {
+    // Use LEFT JOIN to include all job_vacancies even if organization is missing
     let baseQuery = `
-      SELECT DISTINCT
+      SELECT
         jv.id, 
         jv.job_id, 
         jv.language, 
@@ -178,38 +179,42 @@ module.exports.getFilteredJobs = async (req, res) => {
         org.long_name
       FROM 
         job_vacancies jv
-      JOIN 
+      LEFT JOIN 
         organization org ON jv.organization_id = org.id
       WHERE 
         1=1
     `;
 
-    let countQuery = 'SELECT COUNT(DISTINCT jv.id) FROM job_vacancies jv JOIN organization org ON jv.organization_id = org.id WHERE 1=1';
+    // Build the count query with the same LEFT JOIN
+    let countQuery = `
+      SELECT COUNT(jv.id)
+      FROM job_vacancies jv
+      LEFT JOIN organization org ON jv.organization_id = org.id
+      WHERE 1=1
+    `;
+    
     const queryParams = [];
 
-    // Dynamically construct the WHERE clause based on filters
-    for (const [key, value] of Object.entries(req.query)) {
-      if (key !== 'page' && key !== 'size') {
-        if (key === 'job_title') {
-          baseQuery += ` AND to_tsvector('english', ${key}) @@ to_tsquery('english', $${queryParams.length + 1})`;
-          countQuery += ` AND to_tsvector('english', ${key}) @@ to_tsquery('english', $${queryParams.length + 1})`;
-          queryParams.push(value.split(' ').join(' & '));
-        } else {
-          if (typeof value === 'string') {
-            baseQuery += ` AND ${key} ILIKE $${queryParams.length + 1}`;
-            countQuery += ` AND ${key} ILIKE $${queryParams.length + 1}`;
-          } else {
-            baseQuery += ` AND ${key} = $${queryParams.length + 1}`;
-            countQuery += ` AND ${key} = $${queryParams.length + 1}`;
-          }
-          queryParams.push(value);
-        }
-      }
-    }
+    // Construct the dynamic WHERE clause based on provided filters.
+    // Ignore keys with empty values.
+    Object.entries(req.query).forEach(([key, value]) => {
+      if (key === 'page' || key === 'size') return;
+      if (!value || value.toString().trim() === '') return;
 
-    // Add pagination
-    const page = req.query.page || 1;
-    const size = req.query.size || 10;
+      if (key === 'job_title') {
+        baseQuery += ` AND to_tsvector('english', ${key}) @@ to_tsquery('english', $${queryParams.length + 1})`;
+        countQuery += ` AND to_tsvector('english', ${key}) @@ to_tsquery('english', $${queryParams.length + 1})`;
+        queryParams.push(value.split(' ').join(' & '));
+      } else {
+        baseQuery += ` AND ${key} ILIKE $${queryParams.length + 1}`;
+        countQuery += ` AND ${key} ILIKE $${queryParams.length + 1}`;
+        queryParams.push(value);
+      }
+    });
+
+    // Add pagination parameters
+    const page = parseInt(req.query.page, 10) || 1;
+    const size = parseInt(req.query.size, 10) || 10;
     const offset = (page - 1) * size;
     baseQuery += ` ORDER BY end_date ASC LIMIT $${queryParams.length + 1} OFFSET $${queryParams.length + 2}`;
     queryParams.push(size, offset);
@@ -219,15 +224,22 @@ module.exports.getFilteredJobs = async (req, res) => {
 
     try {
       result = await pool.query(baseQuery, queryParams);
-      countResult = await pool.query(countQuery, queryParams.slice(0, -2)); // Exclude pagination params for count query
+      // Exclude pagination values for the count query
+      countResult = await pool.query(countQuery, queryParams.slice(0, -2));
+      console.log(countQuery);
     } catch (e) {
-      console.log(e);
+      console.error(e);
       return res.status(500).json({ success: false, message: 'Database query error' });
     }
 
     const totalRecords = parseInt(countResult.rows[0].count, 10);
 
-    res.status(200).json({ success: true, timestamp: new Date(), totalRecords, data: result.rows });
+    res.status(200).json({
+      success: true,
+      timestamp: new Date(),
+      totalRecords,
+      data: result.rows,
+    });
   } catch (e) {
     res.status(400).json({ success: false, message: e.message });
   }
