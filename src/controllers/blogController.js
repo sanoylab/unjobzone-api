@@ -78,7 +78,7 @@ module.exports.getById = async (req, res) => {
 };
 
 module.exports.getFeaturedBlog = async (req, res) => {
-  try {
+ try {
     const query = `
       SELECT 
         id,
@@ -88,7 +88,7 @@ module.exports.getFeaturedBlog = async (req, res) => {
         featured
       FROM 
         blog
-      WHERE 
+      W HERE 
         featured = 'Yes'
     `;
 

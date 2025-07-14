@@ -1,0 +1,31 @@
+// create TABLE job_vacancies (
+//     id SERIAL PRIMARY KEY,                -- Auto-incrementing ID for each record
+//     job_id INTEGER NOT NULL,              -- Unique job ID
+//     language VARCHAR(20) NOT NULL,         -- Language code (e.g., 'EN')
+//     category_code VARCHAR(30),              -- Category code
+//     job_title TEXT NOT NULL,               -- Job title
+//     job_code_title VARCHAR(255),           -- Job code title
+//     job_description TEXT NOT NULL,         -- Job description
+//     job_family_code VARCHAR(30),            -- Job family code
+//     job_level VARCHAR(20),                  -- Job level
+//     duty_station VARCHAR(30),                   -- Duty station (string array)
+//     recruitment_type VARCHAR(100),           -- Recruitment type (e.g., 'R')
+//     start_date TIMESTAMPTZ NOT NULL,      -- Start date
+//     end_date TIMESTAMPTZ NOT NULL,        -- End date
+//     dept TEXT,                             -- Department details as string
+//     total_count INTEGER,                   -- Total count of vacancies
+//     jn TEXT,                               -- Job network as string
+//     jf TEXT,                                -- Job family as string
+// 	  jc TEXT,                                -- Job family as string
+// 	  jl TEXT,                                -- Job family as string,
+// 	created TIMESTAMPTZ NOT NULL,
+// 	data_source TEXT
+// );
+
+
+
+
+
+
+
+
