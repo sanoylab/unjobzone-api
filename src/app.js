@@ -171,6 +171,31 @@ const runEtl = async () => {
   // The new UPSERT approach prevents duplicates from being inserted in the first place
   console.log("\n✨ Using UPSERT approach - no duplicate cleanup needed!");
   
+  // 🧹 Expired Job Cleanup - Run after all organizations complete
+  console.log("\n🧹 Running expired job cleanup...");
+  try {
+    const { cleanupExpiredJobs } = require("./etl/shared");
+    const cleanupStats = await cleanupExpiredJobs();
+    
+    // Add cleanup results to ETL results
+    etlResults.expiredCleanup = {
+      totalExpiredJobs: cleanupStats.totalExpiredJobs,
+      deletedJobs: cleanupStats.deletedJobs,
+      errorCount: cleanupStats.errorCount,
+      durationSeconds: cleanupStats.durationSeconds
+    };
+    
+    if (cleanupStats.deletedJobs > 0) {
+      console.log(`🗑️  Cleanup completed: ${cleanupStats.deletedJobs} expired jobs removed`);
+    } else {
+      console.log("✅ No expired jobs found - database is clean!");
+    }
+    
+  } catch (cleanupError) {
+    console.error("❌ Expired job cleanup failed:", cleanupError.message);
+    etlResults.expiredCleanup = { error: cleanupError.message };
+  }
+  
   // ETL Summary Report
   console.log("\n" + "=".repeat(50));
   console.log("📋 ETL PROCESS SUMMARY");
@@ -184,6 +209,14 @@ const runEtl = async () => {
   }
   
   console.log(`📊 Total Organizations Processed: ${etlJobs.length}`);
+  
+  // Include cleanup summary
+  if (etlResults.expiredCleanup && !etlResults.expiredCleanup.error) {
+    console.log(`🧹 Expired Jobs Cleanup: ${etlResults.expiredCleanup.deletedJobs || 0} jobs removed`);
+  } else if (etlResults.expiredCleanup?.error) {
+    console.log(`❌ Expired Jobs Cleanup: Failed - ${etlResults.expiredCleanup.error}`);
+  }
+  
   console.log(`⏰ ETL Process Completed: ${new Date()}`);
   console.log("=".repeat(50));
   

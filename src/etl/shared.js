@@ -505,6 +505,194 @@ const getETLHistory = async (organizationName, limit = 10) => {
   }
 };
 
+/**
+ * Expired Job Cleanup - Remove jobs past their end_date
+ */
+
+// Cleanup expired jobs where end_date < CURRENT_DATE
+const cleanupExpiredJobs = async (client = null, dryRun = false) => {
+  let ownClient = false;
+  
+  // Use provided client or create new one
+  if (!client) {
+    client = new Client(credentials);
+    await client.connect();
+    ownClient = true;
+  }
+
+  console.log("\n🧹 ==========================================");
+  console.log("📅 Expired Job Cleanup Started");
+  console.log("============================================");
+
+  const stats = {
+    totalExpiredJobs: 0,
+    deletedJobs: 0,
+    errorCount: 0,
+    organizationBreakdown: {},
+    startTime: new Date(),
+    endTime: null,
+    durationSeconds: 0
+  };
+
+  try {
+    // First, get a count and breakdown of expired jobs
+    const expiredJobsQuery = `
+      SELECT 
+        data_source,
+        COUNT(*) as expired_count,
+        MIN(end_date) as oldest_expired,
+        MAX(end_date) as newest_expired
+      FROM job_vacancies 
+      WHERE end_date < CURRENT_DATE
+      GROUP BY data_source
+      ORDER BY expired_count DESC
+    `;
+    
+    const expiredResult = await client.query(expiredJobsQuery);
+    stats.organizationBreakdown = expiredResult.rows.reduce((acc, row) => {
+      acc[row.data_source] = {
+        count: parseInt(row.expired_count),
+        oldestExpired: row.oldest_expired,
+        newestExpired: row.newest_expired
+      };
+      return acc;
+    }, {});
+
+    // Calculate total expired jobs
+    stats.totalExpiredJobs = expiredResult.rows.reduce((sum, row) => sum + parseInt(row.expired_count), 0);
+
+    console.log(`📊 Found ${stats.totalExpiredJobs} expired jobs across ${expiredResult.rows.length} organizations:`);
+    
+    if (stats.totalExpiredJobs === 0) {
+      console.log("✅ No expired jobs found - database is clean!");
+      stats.endTime = new Date();
+      stats.durationSeconds = Math.round((stats.endTime - stats.startTime) / 1000);
+      return stats;
+    }
+
+    // Show breakdown by organization
+    expiredResult.rows.forEach(row => {
+      console.log(`   📁 ${row.data_source.toUpperCase()}: ${row.expired_count} jobs (oldest: ${row.oldest_expired})`);
+    });
+
+    if (dryRun) {
+      console.log("\n🔍 DRY RUN MODE - No jobs will be deleted");
+      stats.endTime = new Date();
+      stats.durationSeconds = Math.round((stats.endTime - stats.startTime) / 1000);
+      return stats;
+    }
+
+    console.log("\n🗑️  Starting deletion of expired jobs...");
+
+    // Delete expired jobs with proper error handling
+    const deleteQuery = `
+      DELETE FROM job_vacancies 
+      WHERE end_date < CURRENT_DATE
+      RETURNING data_source, job_id, job_title, end_date
+    `;
+
+    const deleteResult = await client.query(deleteQuery);
+    stats.deletedJobs = deleteResult.rowCount;
+
+    // Log some examples of deleted jobs
+    if (deleteResult.rows.length > 0) {
+      console.log("\n📝 Sample deleted jobs:");
+      deleteResult.rows.slice(0, 5).forEach(job => {
+        console.log(`   🗑️  ${job.data_source.toUpperCase()}: "${job.job_title}" (expired: ${job.end_date.toDateString()})`);
+      });
+      
+      if (deleteResult.rows.length > 5) {
+        console.log(`   ... and ${deleteResult.rows.length - 5} more jobs`);
+      }
+    }
+
+    stats.endTime = new Date();
+    stats.durationSeconds = Math.round((stats.endTime - stats.startTime) / 1000);
+
+    console.log("\n✅ =========================================");
+    console.log("📅 Expired Job Cleanup Completed Successfully");
+    console.log(`🗑️  Deleted: ${stats.deletedJobs} expired jobs`);
+    console.log(`⏱️  Duration: ${stats.durationSeconds}s`);
+    console.log("=============================================");
+
+    // Log cleanup activity to ETL status table
+    await logETLStatus('expired_cleanup', 'success', {
+      processedCount: stats.totalExpiredJobs,
+      successCount: stats.deletedJobs,
+      errorCount: stats.errorCount,
+      startTime: stats.startTime,
+      endTime: stats.endTime,
+      durationSeconds: stats.durationSeconds,
+      jobsInDb: 0 // This represents jobs removed
+    });
+
+    return stats;
+
+  } catch (error) {
+    stats.errorCount++;
+    stats.endTime = new Date();
+    stats.durationSeconds = Math.round((stats.endTime - stats.startTime) / 1000);
+
+    console.error("❌ ==========================================");
+    console.error("📅 Expired Job Cleanup Failed");
+    console.error(`❌ Error: ${error.message}`);
+    console.error("=============================================");
+
+    // Log failed cleanup
+    await logETLStatus('expired_cleanup', 'failed', {
+      processedCount: stats.totalExpiredJobs,
+      successCount: 0,
+      errorCount: stats.errorCount,
+      errorMessage: error.message,
+      startTime: stats.startTime,
+      endTime: stats.endTime,
+      durationSeconds: stats.durationSeconds
+    });
+
+    throw error;
+  } finally {
+    if (ownClient) {
+      await client.end();
+    }
+  }
+};
+
+// Get statistics about jobs approaching expiration (within next N days)
+const getJobsExpiringSoon = async (daysAhead = 7) => {
+  const client = new Client(credentials);
+  
+  try {
+    await client.connect();
+    
+    const query = `
+      SELECT 
+        data_source,
+        COUNT(*) as expiring_count,
+        MIN(end_date) as soonest_expiry,
+        MAX(end_date) as latest_expiry
+      FROM job_vacancies 
+      WHERE end_date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '${daysAhead} days'
+      GROUP BY data_source
+      ORDER BY expiring_count DESC
+    `;
+    
+    const result = await client.query(query);
+    const totalExpiring = result.rows.reduce((sum, row) => sum + parseInt(row.expiring_count), 0);
+    
+    return {
+      totalExpiring,
+      daysAhead,
+      organizationBreakdown: result.rows
+    };
+    
+  } catch (error) {
+    console.error('Error getting jobs expiring soon:', error);
+    return { totalExpiring: 0, daysAhead, organizationBreakdown: [] };
+  } finally {
+    await client.end();
+  }
+};
+
 module.exports = {
   getOrganizationId,
   removeDuplicateJobVacancies,
@@ -518,4 +706,6 @@ module.exports = {
   getJobCount,
   getLatestETLStatus,
   getETLHistory,
+  cleanupExpiredJobs,
+  getJobsExpiringSoon,
 };
