@@ -2,7 +2,10 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>ETL Dashboard - UN Job Zone</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
@@ -816,68 +819,258 @@
             transform: translateY(0);
         }
 
-        /* Responsive Design */
+        /* Enhanced Mobile Responsiveness */
         @media (max-width: 1200px) {
             .main-content {
                 grid-template-columns: 1fr;
                 gap: 2rem;
             }
+            
+            .container {
+                padding: var(--space-lg) var(--space-md);
+            }
+            
+            .stats-grid {
+                grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+                gap: var(--space-md);
+            }
         }
 
         @media (max-width: 768px) {
             .container {
-                padding: 1rem;
+                padding: var(--space-md) var(--space-sm);
             }
 
+            .header {
+                padding: var(--space-lg) 0;
+                margin-bottom: var(--space-xl);
+            }
+            
             .header h1 {
-                font-size: 2.5rem;
+                font-size: clamp(2rem, 6vw, 3rem);
+                margin-bottom: var(--space-sm);
+            }
+            
+            .header p {
+                font-size: 1rem;
+                margin-bottom: var(--space-md);
             }
 
             .stats-grid {
                 grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-                gap: 1rem;
+                gap: var(--space-md);
             }
 
             .stat-card {
-                padding: 1.5rem;
+                padding: var(--space-lg);
+                transform: none !important; /* Disable 3D transforms on mobile */
+            }
+            
+            .stat-card:hover {
+                transform: translateY(-4px) !important; /* Simpler hover effect */
             }
 
-            .stat-number {
+            .stat-icon {
+                width: 80px;
+                height: 80px;
                 font-size: 2rem;
             }
 
-            .organization-item {
-                padding: 1rem;
+            .stat-number {
+                font-size: clamp(2rem, 8vw, 2.5rem);
+            }
+
+            .org-card {
+                padding: var(--space-lg);
+                margin-bottom: var(--space-md);
+                transform: none !important; /* Disable 3D transforms on mobile */
+            }
+            
+            .org-card:hover {
+                transform: translateY(-4px) !important; /* Simpler hover effect */
+            }
+
+            .organizations-panel, .charts-panel, .recent-activity {
+                padding: var(--space-md);
+                margin-bottom: var(--space-md);
             }
 
             .performance-metrics {
-                grid-template-columns: 1fr;
+                grid-template-columns: repeat(2, 1fr);
+                gap: var(--space-sm);
+            }
+            
+            .metric-item {
+                padding: var(--space-md);
+            }
+            
+            .metric-value {
+                font-size: 1.5rem;
+            }
+            
+            .activity-item {
+                padding: var(--space-sm) 0;
+                flex-wrap: wrap;
+            }
+            
+            .activity-icon {
+                width: 35px;
+                height: 35px;
+                flex-shrink: 0;
+            }
+            
+            .activity-content {
+                flex: 1;
+                min-width: 0; /* Allow text to wrap */
+            }
+            
+            .activity-title {
+                font-size: 0.9rem;
+                line-height: 1.3;
+            }
+            
+            .activity-time {
+                font-size: 0.8rem;
             }
         }
 
         @media (max-width: 480px) {
+            .container {
+                padding: var(--space-sm);
+            }
+            
+            .header {
+                text-align: center;
+                padding: var(--space-md) 0;
+            }
+
             .header h1 {
-                font-size: 2rem;
+                font-size: clamp(1.8rem, 8vw, 2.5rem);
+                line-height: 1.2;
+            }
+            
+            .header p {
+                font-size: 0.9rem;
+            }
+            
+            .last-updated {
+                padding: var(--space-xs) var(--space-sm);
+                font-size: 0.8rem;
             }
 
             .stats-grid {
                 grid-template-columns: 1fr;
+                gap: var(--space-sm);
+            }
+            
+            .stat-card {
+                padding: var(--space-md);
+            }
+            
+            .stat-icon {
+                width: 70px;
+                height: 70px;
+                font-size: 1.8rem;
+                margin-bottom: var(--space-sm);
             }
 
-            .org-info {
+            .org-card {
+                padding: var(--space-md);
+            }
+            
+            .org-header {
                 flex-direction: column;
                 align-items: flex-start;
-                gap: 0.5rem;
+                gap: var(--space-sm);
+                margin-bottom: var(--space-sm);
             }
-
-            .organization-item {
-                flex-direction: column;
-                align-items: stretch;
-                gap: 1rem;
+            
+            .org-header h3 {
+                font-size: 1.2rem;
             }
-
-            .status-badge {
+            
+            .status {
                 align-self: flex-start;
+                padding: var(--space-xs) var(--space-sm);
+                font-size: 0.8rem;
+            }
+            
+            .org-details p {
+                font-size: 0.9rem;
+                margin: var(--space-xs) 0;
+            }
+
+            .performance-metrics {
+                grid-template-columns: 1fr;
+                gap: var(--space-sm);
+            }
+            
+            .panel-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: var(--space-sm);
+                margin-bottom: var(--space-md);
+            }
+            
+            .panel-title {
+                font-size: 1.2rem;
+            }
+            
+            .refresh-btn {
+                padding: var(--space-xs) var(--space-sm);
+                font-size: 0.9rem;
+                align-self: flex-start;
+            }
+            
+            .activity-item {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: var(--space-sm);
+                padding: var(--space-sm) 0;
+            }
+            
+            .activity-icon {
+                width: 40px;
+                height: 40px;
+                align-self: flex-start;
+            }
+            
+            .chart-container {
+                height: 250px; /* Smaller chart on mobile */
+            }
+        }
+        
+        /* Touch-friendly improvements for mobile */
+        @media (max-width: 768px) {
+            .refresh-btn, .status, .last-updated {
+                min-height: 44px; /* Touch-friendly minimum size */
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+            
+            .org-card, .stat-card, .activity-item {
+                transition: transform 0.2s ease; /* Faster transitions on mobile */
+            }
+            
+            /* Improve text readability on mobile */
+            .org-details p, .activity-title, .activity-time {
+                line-height: 1.4;
+            }
+        }
+        
+        /* Landscape phone orientation */
+        @media (max-width: 768px) and (orientation: landscape) {
+            .stats-grid {
+                grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            }
+            
+            .header h1 {
+                font-size: clamp(1.5rem, 5vw, 2.5rem);
+            }
+            
+            .performance-metrics {
+                grid-template-columns: repeat(2, 1fr);
             }
         }
 
@@ -1378,6 +1571,55 @@
                 console.warn('⚠️ organizationsContainer not found');
             }
             
+            // Update recent activity container
+            const recentActivityContainer = document.getElementById('recentActivityContainer');
+            if (recentActivityContainer && data.organizations) {
+                console.log('📋 Updating recent activity...');
+                
+                // Sort organizations by last activity (most recent first) and take the last 6
+                const recentActivities = data.organizations
+                    .filter(org => org.lastRun !== 'Never')
+                    .sort((a, b) => {
+                        const timeA = new Date(a.startTime || a.endTime || 0);
+                        const timeB = new Date(b.startTime || b.endTime || 0);
+                        return timeB - timeA;
+                    })
+                    .slice(0, 6);
+                
+                if (recentActivities.length > 0) {
+                    recentActivityContainer.innerHTML = recentActivities.map(org => {
+                        const actionText = org.status === 'running' ? 'ETL Started' : 
+                                         org.status === 'success' ? 'ETL Completed' : 
+                                         org.status === 'failed' ? 'ETL Failed' : 'ETL Status Update';
+                        
+                        const iconGradient = getStatusGradient(org.status);
+                        const statusIcon = getStatusIcon(org.status);
+                        
+                        return `
+                            <div class="activity-item">
+                                <div class="activity-icon" style="background: ${iconGradient};">
+                                    <i class="fas fa-${statusIcon}"></i>
+                                </div>
+                                <div class="activity-content">
+                                    <div class="activity-title">${org.name} - ${actionText}</div>
+                                    <div class="activity-time">${org.lastRun}${org.duration ? ` • ${formatDuration(org.duration)}` : ''}</div>
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                } else {
+                    recentActivityContainer.innerHTML = `
+                        <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+                            <i class="fas fa-info-circle" style="font-size: 2rem; margin-bottom: 1rem; opacity: 0.5;"></i>
+                            <p>No recent ETL activity found</p>
+                        </div>
+                    `;
+                }
+                console.log(`✅ Updated recent activity with ${recentActivities.length} items`);
+            } else {
+                console.warn('⚠️ recentActivityContainer not found or no organization data');
+            }
+            
             // Update system health if available
             if (data.systemHealth) {
                 const healthStatus = document.getElementById('system-health');
@@ -1391,10 +1633,10 @@
             }
             
             // Update chart if function exists
-            if (typeof updateStatusChart === 'function') {
-                updateStatusChart(data.statistics);
+            if (typeof updateChart === 'function') {
+                updateChart(data.statistics);
             } else {
-                console.warn('⚠️ updateStatusChart function not found');
+                console.warn('⚠️ updateChart function not found');
             }
             
             // Update last updated timestamp
@@ -1618,6 +1860,88 @@
             if (diffDays < 7) return `${diffDays} days ago`;
             
             return lastRun.toLocaleDateString();
+        }
+        
+        // Helper function to format duration for activity display
+        function formatDuration(seconds) {
+            if (!seconds || seconds === 0) return '';
+            
+            if (seconds < 60) {
+                return `${seconds}s`;
+            } else if (seconds < 3600) {
+                const minutes = Math.floor(seconds / 60);
+                const remainingSeconds = seconds % 60;
+                return remainingSeconds > 0 ? `${minutes}m ${remainingSeconds}s` : `${minutes}m`;
+            } else {
+                const hours = Math.floor(seconds / 3600);
+                const minutes = Math.floor((seconds % 3600) / 60);
+                return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
+            }
+        }
+        
+        // Update chart function
+        function updateChart(statistics) {
+            const ctx = document.getElementById('statusChart');
+            if (!ctx) {
+                console.warn('⚠️ statusChart canvas not found');
+                return;
+            }
+            
+            const context = ctx.getContext('2d');
+            
+            if (statusChart) {
+                statusChart.destroy();
+            }
+
+            statusChart = new Chart(context, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Successful', 'Running', 'Failed', 'Idle'],
+                    datasets: [{
+                        data: [
+                            statistics.successfulOrgs || 0, 
+                            statistics.runningOrgs || 0, 
+                            statistics.failedOrgs || 0,
+                            statistics.idleOrgs || 0
+                        ],
+                        backgroundColor: [
+                            'rgba(56, 239, 125, 0.8)',
+                            'rgba(252, 227, 138, 0.8)',
+                            'rgba(252, 70, 107, 0.8)',
+                            'rgba(9, 198, 249, 0.8)'
+                        ],
+                        borderColor: [
+                            'rgba(56, 239, 125, 1)',
+                            'rgba(252, 227, 138, 1)',
+                            'rgba(252, 70, 107, 1)',
+                            'rgba(9, 198, 249, 1)'
+                        ],
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                color: 'rgba(255, 255, 255, 0.8)',
+                                font: {
+                                    family: 'Inter',
+                                    size: 12
+                                },
+                                padding: 20
+                            }
+                        }
+                    },
+                    elements: {
+                        arc: {
+                            borderWidth: 2
+                        }
+                    }
+                }
+            });
         }
 
         // Cleanup on page unload
