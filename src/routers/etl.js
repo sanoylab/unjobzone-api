@@ -8,7 +8,8 @@ const {
   getOrganizationHistory,
   getStatistics,
   getHealthCheck,
-  triggerETL
+  triggerETL,
+  clearCache
 } = require("../controllers/etlController");
 
 // Apply rate limiting to all ETL routes
@@ -389,5 +390,43 @@ router.get("/statistics", auth, getStatistics);
  *         description: Too many requests
  */
 router.post("/trigger", auth, triggerETL);
+
+/**
+ * @swagger
+ * /api/v1/etl/clear-cache:
+ *   post:
+ *     summary: Clear Redis cache for job data
+ *     tags: [ETL Monitoring]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Cache cleared successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/APIResponse'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       type: object
+ *                       properties:
+ *                         clearedKeys:
+ *                           type: integer
+ *                           description: Number of cache keys cleared
+ *                         keys:
+ *                           type: array
+ *                           items:
+ *                             type: string
+ *                           description: List of cleared cache keys
+ *                         message:
+ *                           type: string
+ *       401:
+ *         description: Unauthorized
+ *       503:
+ *         description: Redis server unavailable
+ */
+router.post("/clear-cache", auth, clearCache);
 
 module.exports = router; 

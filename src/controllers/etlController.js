@@ -308,4 +308,43 @@ module.exports.triggerETL = async (req, res) => {
   } catch (error) {
     sendResponse(res, 500, false, null, 'Error processing ETL trigger request', 'TRIGGER_ERROR');
   }
+};
+
+// Clear Redis cache for job data
+module.exports.clearCache = async (req, res) => {
+  try {
+    console.log(`Cache clear requested by user ${req.user?.id || 'anonymous'}`);
+    
+    const redisClient = require('../redisClient');
+    
+    // Get all job-related cache keys
+    const cacheKeys = await redisClient.keys('jobs:*');
+    
+    if (cacheKeys.length === 0) {
+      return sendResponse(res, 200, true, { 
+        clearedKeys: 0, 
+        message: 'No cached entries found' 
+      }, 'Cache is already clean');
+    }
+    
+    // Delete all job-related cache keys
+    const clearedCount = await redisClient.del(cacheKeys);
+    
+    console.log(`✅ Cleared ${clearedCount} job cache entries`);
+    
+    sendResponse(res, 200, true, { 
+      clearedKeys: clearedCount,
+      keys: cacheKeys,
+      message: 'Cache cleared successfully'
+    }, `Cleared ${clearedCount} cached job entries`);
+    
+  } catch (error) {
+    console.error('Error clearing cache:', error);
+    
+    if (error.message.includes('ECONNREFUSED')) {
+      return sendResponse(res, 503, false, null, 'Redis server unavailable', 'REDIS_ERROR');
+    }
+    
+    sendResponse(res, 500, false, null, 'Error clearing cache', 'CACHE_CLEAR_ERROR');
+  }
 }; 

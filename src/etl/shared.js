@@ -200,6 +200,20 @@ const executeETLWithTransaction = async (organizationName, etlFunction) => {
       console.log(`✅ ${organizationName}: ETL completed successfully`);
       console.log(`📈 ${organizationName}: Processed ${result.processedCount} jobs, ${result.successCount} inserted, ${result.errorCount} errors`);
       
+      // 🔄 Clear Redis cache after successful ETL to ensure fresh data
+      try {
+        const redisClient = require('../redisClient');
+        const cacheKeys = await redisClient.keys('jobs:*');
+        
+        if (cacheKeys.length > 0) {
+          await redisClient.del(cacheKeys);
+          console.log(`🔄 ${organizationName}: Cleared ${cacheKeys.length} cached job entries from Redis`);
+        }
+      } catch (redisError) {
+        console.warn(`⚠️  ${organizationName}: Could not clear Redis cache: ${redisError.message}`);
+        // Don't fail the ETL if Redis clearing fails
+      }
+      
       return result;
     } else {
       throw new Error(result.error || 'ETL function returned failure');
@@ -593,6 +607,25 @@ const cleanupExpiredJobs = async (client = null, dryRun = false) => {
 
     const deleteResult = await client.query(deleteQuery);
     stats.deletedJobs = deleteResult.rowCount;
+
+    // 🔄 Clear Redis cache after deleting expired jobs
+    if (stats.deletedJobs > 0) {
+      try {
+        const redisClient = require('../redisClient');
+        
+        // Get all job-related cache keys
+        const cacheKeys = await redisClient.keys('jobs:*');
+        
+        if (cacheKeys.length > 0) {
+          // Delete all job-related cache keys
+          await redisClient.del(cacheKeys);
+          console.log(`🔄 Cleared ${cacheKeys.length} cached job entries from Redis`);
+        }
+      } catch (redisError) {
+        console.warn(`⚠️  Could not clear Redis cache: ${redisError.message}`);
+        // Don't fail the cleanup if Redis clearing fails
+      }
+    }
 
     // Log some examples of deleted jobs
     if (deleteResult.rows.length > 0) {
