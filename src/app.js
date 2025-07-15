@@ -66,8 +66,8 @@ const runEtl = async () => {
     totalErrors: 0
   };
   
-  // Import the new error handling utilities
-  const { executeETLWithTransaction, logETLStatus, getJobCount } = require("./etl/shared");
+  // Import the ETL utilities
+  const { logETLStatus, getJobCount } = require("./etl/shared");
   
   // Define ETL functions with their organization names
   const etlJobs = [
@@ -97,19 +97,27 @@ const runEtl = async () => {
         errorCount: 0
       });
       
-      // Note: This creates a wrapper that maintains existing function signatures
-      // while adding transaction support
-      const result = await executeETLWithTransaction(name, async (client) => {
-        // Call the existing ETL function
-        // We'll need to modify individual functions to return success/error info
+      // Call ETL function directly (they manage their own connections)
+      // The transaction wrapper approach needs refactoring of individual ETL functions
+      let result = { success: false, error: 'Unknown error' };
+      
+      try {
         await func();
-        return { 
+        result = { 
           success: true, 
-          processedCount: 0, // Will be updated when we refactor individual functions
+          processedCount: 0, // Individual functions don't return this yet
           successCount: 0,
           errorCount: 0
         };
-      });
+      } catch (error) {
+        result = {
+          success: false,
+          error: error.message,
+          processedCount: 0,
+          successCount: 0,
+          errorCount: 1
+        };
+      }
       
       const endTime = new Date();
       const durationSeconds = Math.round((endTime - startTime) / 1000);
@@ -129,6 +137,19 @@ const runEtl = async () => {
           errorCount: result.errorCount || 0,
           jobsInDb
         });
+        
+        // 🔄 Clear Redis cache after successful ETL
+        try {
+          const redisClient = require('./redisClient');
+          const cacheKeys = await redisClient.keys('jobs:*');
+          
+          if (cacheKeys.length > 0) {
+            await redisClient.del(cacheKeys);
+            console.log(`🔄 ${name}: Cleared ${cacheKeys.length} cached job entries from Redis`);
+          }
+        } catch (redisError) {
+          console.warn(`⚠️  ${name}: Could not clear Redis cache: ${redisError.message}`);
+        }
         
       } else {
         etlResults.failed.push({ name, error: result.error });
