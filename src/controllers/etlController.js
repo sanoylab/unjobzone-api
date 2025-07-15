@@ -347,4 +347,128 @@ module.exports.clearCache = async (req, res) => {
     
     sendResponse(res, 500, false, null, 'Error clearing cache', 'CACHE_CLEAR_ERROR');
   }
-}; 
+};
+
+// Fix database schema issues (latest_etl_status view)
+const fixDatabaseSchema = async (req, res) => {
+  try {
+    console.log('🔧 Attempting to fix database schema...');
+    
+    // Check if etl_status table exists
+    const tableCheck = await pool.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'etl_status'
+      );
+    `);
+    
+    let tablesCreated = 0;
+    let viewsCreated = 0;
+    
+    if (!tableCheck.rows[0].exists) {
+      console.log("⚠️  etl_status table doesn't exist. Creating it...");
+      
+      // Create the etl_status table
+      await pool.query(`
+        CREATE TABLE etl_status (
+          id SERIAL PRIMARY KEY,
+          organization_name VARCHAR(50) NOT NULL,
+          status VARCHAR(20) NOT NULL CHECK (status IN ('running', 'success', 'failed')),
+          processed_count INTEGER DEFAULT 0 CHECK (processed_count >= 0),
+          success_count INTEGER DEFAULT 0 CHECK (success_count >= 0),
+          error_count INTEGER DEFAULT 0 CHECK (error_count >= 0),
+          error_message TEXT,
+          start_time TIMESTAMPTZ,
+          end_time TIMESTAMPTZ,
+          duration_seconds INTEGER CHECK (duration_seconds >= 0),
+          jobs_in_db INTEGER DEFAULT 0 CHECK (jobs_in_db >= 0),
+          created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+          
+          -- Constraints
+          CONSTRAINT valid_counts CHECK (success_count + error_count <= processed_count),
+          CONSTRAINT valid_time_range CHECK (end_time IS NULL OR end_time >= start_time)
+        );
+      `);
+      
+      tablesCreated++;
+      console.log("✅ Created etl_status table");
+      
+      // After creating the table, create the view
+      await pool.query(`
+        CREATE OR REPLACE VIEW latest_etl_status AS
+        SELECT DISTINCT ON (organization_name) 
+          organization_name,
+          status,
+          processed_count,
+          success_count,
+          error_count,
+          error_message,
+          start_time,
+          end_time,
+          duration_seconds,
+          jobs_in_db,
+          created_at
+        FROM etl_status 
+        ORDER BY organization_name, created_at DESC;
+      `);
+      
+      viewsCreated++;
+      console.log("✅ Created latest_etl_status view");
+    } else {
+      console.log("✅ etl_status table exists");
+      
+      // Table exists, just create/replace the view
+      await pool.query(`
+        CREATE OR REPLACE VIEW latest_etl_status AS
+        SELECT DISTINCT ON (organization_name) 
+          organization_name,
+          status,
+          processed_count,
+          success_count,
+          error_count,
+          error_message,
+          start_time,
+          end_time,
+          duration_seconds,
+          jobs_in_db,
+          created_at
+        FROM etl_status 
+        ORDER BY organization_name, created_at DESC;
+      `);
+      
+      viewsCreated++;
+      console.log("✅ Created/updated latest_etl_status view");
+    }
+    
+    // Create performance indexes
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_etl_status_org_created 
+      ON etl_status(organization_name, created_at DESC);
+    `);
+    
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_etl_status_created 
+      ON etl_status(created_at DESC);
+    `);
+    
+    // Test the view
+    const testResult = await pool.query("SELECT COUNT(*) FROM latest_etl_status");
+    const recordCount = parseInt(testResult.rows[0].count);
+    
+    console.log("🎉 Database schema fix completed successfully!");
+    
+    sendResponse(res, 200, true, {
+      tablesCreated,
+      viewsCreated,
+      recordCount,
+      message: 'Database schema fix completed'
+    }, 'Database schema has been fixed successfully');
+    
+  } catch (error) {
+    console.error('❌ Error fixing database schema:', error);
+    sendResponse(res, 500, false, null, 'Error fixing database schema', error.message);
+  }
+};
+
+module.exports.fixDatabaseSchema = fixDatabaseSchema; 

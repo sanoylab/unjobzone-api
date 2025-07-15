@@ -9,7 +9,8 @@ const {
   getStatistics,
   getHealthCheck,
   triggerETL,
-  clearCache
+  clearCache,
+  fixDatabaseSchema
 } = require("../controllers/etlController");
 
 // Apply rate limiting to all ETL routes
@@ -428,5 +429,44 @@ router.post("/trigger", auth, triggerETL);
  *         description: Redis server unavailable
  */
 router.post("/clear-cache", auth, clearCache);
+
+/**
+ * @swagger
+ * /api/v1/etl/fix-database-schema:
+ *   post:
+ *     summary: Fix missing database schema components (latest_etl_status view)
+ *     tags: [ETL Monitoring]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Database schema fixed successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/APIResponse'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       type: object
+ *                       properties:
+ *                         tablesCreated:
+ *                           type: integer
+ *                           description: Number of tables created
+ *                         viewsCreated:
+ *                           type: integer
+ *                           description: Number of views created
+ *                         recordCount:
+ *                           type: integer
+ *                           description: Number of records in the view
+ *                         message:
+ *                           type: string
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Database error
+ */
+router.post("/fix-database-schema", auth, fixDatabaseSchema);
 
 module.exports = router; 
