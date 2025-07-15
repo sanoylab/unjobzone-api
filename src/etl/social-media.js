@@ -74,10 +74,29 @@ const uploadImageToLinkedIn = async (imagePath) => {
 
 // Function to get a random image from the directory
 const getRandomImage = () => {
-  const imagesDir = path.join(__dirname, "post_images"); // Ensure this directory exists and contains your images
-  const images = fs.readdirSync(imagesDir);
+  const imagesDir = path.join(__dirname, "post_images");
+  
+  // Check if directory exists
+  if (!fs.existsSync(imagesDir)) {
+    console.error(`❌ Images directory not found: ${imagesDir}`);
+    throw new Error('LinkedIn post images directory not found. Please create src/etl/post_images/ and add images.');
+  }
+  
+  // Get all image files
+  const images = fs.readdirSync(imagesDir).filter(file => 
+    /\.(jpg|jpeg|png|gif)$/i.test(file)
+  );
+  
+  if (images.length === 0) {
+    console.error('❌ No image files found in post_images directory');
+    throw new Error('No images found in post_images directory. Please add .jpg, .jpeg, .png, or .gif files.');
+  }
+  
   const randomImage = images[Math.floor(Math.random() * images.length)];
-  return path.join(imagesDir, randomImage);
+  const imagePath = path.join(imagesDir, randomImage);
+  
+  console.log(`📸 Selected random image: ${randomImage}`);
+  return imagePath;
 };
 
 // Post job network jobs to LinkedIn
@@ -383,14 +402,132 @@ module.exports.postExpiringSoonJobPostsToLinkedIn = async () => {
 const validateLinkedInCredentials = () => {
   const requiredEnvVars = [
     'LINKEDIN_CLIENT_ID',
-    'LINKEDIN_CLIENT_SECRET',
+    'LINKEDIN_CLIENT_SECRET', 
     'LINKEDIN_ACCESS_TOKEN',
     'LINKEDIN_ORGANIZATION_ID'
   ];
 
   const missing = requiredEnvVars.filter(varName => !process.env[varName]);
   if (missing.length) {
+    console.error('❌ LinkedIn ETL Configuration Error:');
+    console.error(`   Missing required environment variables: ${missing.join(', ')}`);
+    console.error('');
+    console.error('💡 To fix this:');
+    console.error('   1. Create a LinkedIn Developer App at https://developer.linkedin.com/');
+    console.error('   2. Get your Client ID, Client Secret, and Access Token');
+    console.error('   3. Add these to your .env file:');
+    console.error('      LINKEDIN_CLIENT_ID=your_client_id');
+    console.error('      LINKEDIN_CLIENT_SECRET=your_client_secret');
+    console.error('      LINKEDIN_ACCESS_TOKEN=your_access_token');
+    console.error('      LINKEDIN_ORGANIZATION_ID=your_org_id');
+    console.error('      LINKEDIN_REFRESH_TOKEN=your_refresh_token (optional)');
     throw new Error(`Missing required LinkedIn credentials: ${missing.join(', ')}`);
+  }
+  
+  // Validate organization ID format
+  const orgId = process.env.LINKEDIN_ORGANIZATION_ID;
+  if (orgId && isNaN(orgId)) {
+    console.warn('⚠️  LinkedIn Organization ID should be numeric');
+  }
+  
+  console.log('✅ LinkedIn credentials validated successfully');
+};
+
+// Function to refresh LinkedIn access token
+module.exports.refreshLinkedInToken = async () => {
+  try {
+    console.log('🔄 Attempting to refresh LinkedIn token...');
+    
+    // Check if refresh token exists
+    if (!process.env.LINKEDIN_REFRESH_TOKEN) {
+      throw new Error('Missing LinkedIn refresh token. Manual re-authentication required.');
+    }
+
+    const refreshUrl = 'https://www.linkedin.com/oauth/v2/accessToken';
+    const params = new URLSearchParams({
+      grant_type: 'refresh_token',
+      refresh_token: process.env.LINKEDIN_REFRESH_TOKEN,
+      client_id: process.env.LINKEDIN_CLIENT_ID,
+      client_secret: process.env.LINKEDIN_CLIENT_SECRET
+    });
+
+    const response = await fetch(refreshUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: params
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error('LinkedIn Token Refresh Error:', {
+        status: response.status,
+        statusText: response.statusText,
+        error: errorData
+      });
+      throw new Error(`LinkedIn token refresh failed: ${errorData.error_description || response.statusText}`);
+    }
+
+    const tokenData = await response.json();
+    
+    // Note: In a production environment, you would save the new access token to your environment
+    console.log('✅ LinkedIn token refreshed successfully');
+    console.warn('⚠️  New access token received. Update your LINKEDIN_ACCESS_TOKEN environment variable:');
+    console.log(`New Access Token: ${tokenData.access_token}`);
+    
+    // Temporarily update the process environment (only for this session)
+    process.env.LINKEDIN_ACCESS_TOKEN = tokenData.access_token;
+    
+    return tokenData;
+
+  } catch (error) {
+    console.error('❌ Failed to refresh LinkedIn token:', error.message);
+    console.warn('💡 Manual Steps Required:');
+    console.warn('   1. Go to LinkedIn Developer Portal');
+    console.warn('   2. Re-authenticate your application');
+    console.warn('   3. Update LINKEDIN_ACCESS_TOKEN and LINKEDIN_REFRESH_TOKEN');
+    throw error;
+  }
+};
+
+// Test function to verify LinkedIn ETL setup
+module.exports.testLinkedInSetup = async () => {
+  try {
+    console.log('🧪 Testing LinkedIn ETL setup...');
+    
+    // Test 1: Validate credentials
+    console.log('1️⃣  Testing credentials validation...');
+    validateLinkedInCredentials();
+    
+    // Test 2: Check image directory
+    console.log('2️⃣  Testing image directory...');
+    const imagePath = getRandomImage();
+    console.log(`   ✅ Image found: ${path.basename(imagePath)}`);
+    
+    // Test 3: Test database connection
+    console.log('3️⃣  Testing database connection...');
+    const testQuery = 'SELECT COUNT(*) as count FROM job_vacancies LIMIT 1';
+    const result = await pool.query(testQuery);
+    console.log(`   ✅ Database connected. Total jobs: ${result.rows[0].count}`);
+    
+    // Test 4: Check LinkedIn API access (just validate token format)
+    console.log('4️⃣  Testing LinkedIn API access...');
+    const token = process.env.LINKEDIN_ACCESS_TOKEN;
+    if (!token || token.length < 50) {
+      throw new Error('LinkedIn access token appears to be invalid (too short)');
+    }
+    console.log(`   ✅ Access token format looks valid (${token.length} characters)`);
+    
+    console.log('');
+    console.log('🎉 LinkedIn ETL setup test completed successfully!');
+    console.log('💡 You can now run LinkedIn posting functions.');
+    
+    return { success: true, message: 'All tests passed' };
+    
+  } catch (error) {
+    console.error('❌ LinkedIn ETL setup test failed:', error.message);
+    throw error;
   }
 };
 

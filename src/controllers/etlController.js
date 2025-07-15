@@ -471,4 +471,56 @@ const fixDatabaseSchema = async (req, res) => {
   }
 };
 
-module.exports.fixDatabaseSchema = fixDatabaseSchema; 
+module.exports.fixDatabaseSchema = fixDatabaseSchema;
+
+// LinkedIn ETL Testing and Manual Triggers
+const testLinkedInETL = async (req, res) => {
+  try {
+    console.log('🔧 Testing LinkedIn ETL setup...');
+    
+    const { testLinkedInSetup } = require('../etl/social-media');
+    const result = await testLinkedInSetup();
+    
+    sendResponse(res, 200, true, result, 'LinkedIn ETL test completed successfully');
+    
+  } catch (error) {
+    console.error('❌ LinkedIn ETL test failed:', error);
+    sendResponse(res, 500, false, null, 'LinkedIn ETL test failed', error.message);
+  }
+};
+
+// Manual LinkedIn Post Trigger
+const triggerLinkedInPost = async (req, res) => {
+  try {
+    const { type, jobNetwork } = req.body;
+    
+    console.log(`🚀 Manually triggering LinkedIn post - Type: ${type}, Network: ${jobNetwork || 'N/A'}`);
+    
+    const { 
+      postExpiringSoonJobPostsToLinkedIn, 
+      postJobNetworkPostsToLinkedIn 
+    } = require('../etl/social-media');
+    
+    let result;
+    
+    if (type === 'expiring') {
+      result = await postExpiringSoonJobPostsToLinkedIn();
+    } else if (type === 'network' && jobNetwork) {
+      result = await postJobNetworkPostsToLinkedIn(jobNetwork);
+    } else {
+      return sendResponse(res, 400, false, null, 'Invalid request. Use type: "expiring" or "network" with jobNetwork');
+    }
+    
+    sendResponse(res, 200, true, { 
+      linkedinResponse: result,
+      message: 'LinkedIn post triggered successfully'
+    }, 'LinkedIn post completed successfully');
+    
+  } catch (error) {
+    console.error('❌ Manual LinkedIn post failed:', error);
+    sendResponse(res, 500, false, null, 'LinkedIn post failed', error.message);
+  }
+};
+
+module.exports.testLinkedInETL = testLinkedInETL;
+module.exports.triggerLinkedInPost = triggerLinkedInPost; 

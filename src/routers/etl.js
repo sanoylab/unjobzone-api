@@ -10,7 +10,9 @@ const {
   getHealthCheck,
   triggerETL,
   clearCache,
-  fixDatabaseSchema
+  fixDatabaseSchema,
+  testLinkedInETL,
+  triggerLinkedInPost
 } = require("../controllers/etlController");
 
 // Apply rate limiting to all ETL routes
@@ -468,5 +470,88 @@ router.post("/clear-cache", auth, clearCache);
  *         description: Database error
  */
 router.post("/fix-database-schema", auth, fixDatabaseSchema);
+
+/**
+ * @swagger
+ * /api/v1/etl/test-linkedin:
+ *   post:
+ *     summary: Test LinkedIn ETL setup and configuration
+ *     tags: [ETL Monitoring]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: LinkedIn ETL test completed successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/APIResponse'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       type: object
+ *                       properties:
+ *                         success:
+ *                           type: boolean
+ *                         message:
+ *                           type: string
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: LinkedIn ETL configuration error
+ */
+router.post("/test-linkedin", auth, testLinkedInETL);
+
+/**
+ * @swagger
+ * /api/v1/etl/trigger-linkedin-post:
+ *   post:
+ *     summary: Manually trigger LinkedIn job posting
+ *     tags: [ETL Monitoring]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - type
+ *             properties:
+ *               type:
+ *                 type: string
+ *                 enum: [expiring, network]
+ *                 description: Type of LinkedIn post to create
+ *               jobNetwork:
+ *                 type: string
+ *                 description: Job network category (required for type "network")
+ *                 example: "Information and Telecommunication Technology"
+ *     responses:
+ *       200:
+ *         description: LinkedIn post created successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/APIResponse'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       type: object
+ *                       properties:
+ *                         linkedinResponse:
+ *                           type: object
+ *                         message:
+ *                           type: string
+ *       400:
+ *         description: Invalid request parameters
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: LinkedIn posting failed
+ */
+router.post("/trigger-linkedin-post", auth, triggerLinkedInPost);
 
 module.exports = router; 
