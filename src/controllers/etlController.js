@@ -253,10 +253,11 @@ module.exports.getStatistics = async (req, res) => {
   }
 };
 
-// Get health check for ETL system
+// Get health check for ETL system with detailed organization status
 module.exports.getHealthCheck = async (req, res) => {
   try {
-    const healthQuery = `
+    // Get summary statistics
+    const summaryQuery = `
       SELECT 
         COUNT(*) as total_organizations,
         COUNT(CASE WHEN created_at >= NOW() - INTERVAL '24 hours' THEN 1 END) as recent_runs,
@@ -265,26 +266,105 @@ module.exports.getHealthCheck = async (req, res) => {
       FROM latest_etl_status;
     `;
     
-    const result = await pool.query(healthQuery);
-    const health = result.rows[0];
+    // Get detailed organization status including duration and job counts
+    const organizationsQuery = `
+      SELECT 
+        organization_name,
+        status,
+        start_time,
+        end_time,
+        duration_seconds,
+        jobs_in_db,
+        processed_count,
+        success_count,
+        error_count,
+        error_message,
+        created_at,
+        CASE 
+          WHEN created_at >= NOW() - INTERVAL '6 hours' THEN 'recent'
+          WHEN created_at >= NOW() - INTERVAL '24 hours' THEN 'today'
+          ELSE 'older'
+        END as recency
+      FROM latest_etl_status
+      ORDER BY organization_name;
+    `;
     
-    const isHealthy = health.total_organizations > 0 && health.recent_runs > 0;
-    const status = isHealthy ? 'healthy' : 'degraded';
+    const [summaryResult, orgsResult] = await Promise.all([
+      pool.query(summaryQuery),
+      pool.query(organizationsQuery)
+    ]);
+    
+    const health = summaryResult.rows[0];
+    const organizations = orgsResult.rows;
+    
+    // Calculate statistics
+    const stats = {
+      totalOrganizations: parseInt(health.total_organizations) || 0,
+      recentRuns: parseInt(health.recent_runs) || 0,
+      currentlyRunning: parseInt(health.currently_running) || 0,
+      successfulOrgs: organizations.filter(org => org.status === 'success').length,
+      failedOrgs: organizations.filter(org => org.status === 'failed').length,
+      idleOrgs: organizations.filter(org => org.status !== 'running' && org.status !== 'success' && org.status !== 'failed').length,
+      totalJobs: organizations.reduce((sum, org) => sum + (parseInt(org.jobs_in_db) || 0), 0),
+      avgDuration: organizations.length > 0 ? 
+        Math.round(organizations.reduce((sum, org) => sum + (org.duration_seconds || 0), 0) / organizations.length) : 0
+    };
+    
+    const isHealthy = stats.totalOrganizations > 0 && stats.recentRuns > 0;
+    const systemStatus = isHealthy ? 'healthy' : 'degraded';
+    
+    // Format organizations data for dashboard
+    const formattedOrgs = organizations.map(org => ({
+      name: org.organization_name,
+      status: org.status || 'idle',
+      lastRun: org.created_at ? formatLastRun(org.created_at) : 'Never',
+      jobsProcessed: parseInt(org.jobs_in_db) || 0,
+      duration: org.duration_seconds || null,
+      processedCount: parseInt(org.processed_count) || 0,
+      successCount: parseInt(org.success_count) || 0,
+      errorCount: parseInt(org.error_count) || 0,
+      errorMessage: org.error_message,
+      recency: org.recency,
+      startTime: org.start_time,
+      endTime: org.end_time
+    }));
     
     sendResponse(res, isHealthy ? 200 : 503, true, {
-      status,
-      totalOrganizations: parseInt(health.total_organizations),
-      recentRuns: parseInt(health.recent_runs),
-      currentlyRunning: parseInt(health.currently_running),
-      lastActivity: health.last_activity,
-      uptime: process.uptime(),
-      timestamp: new Date()
+      status: systemStatus,
+      statistics: stats,
+      organizations: formattedOrgs,
+      systemHealth: {
+        status: systemStatus,
+        uptime: Math.round(process.uptime()),
+        lastActivity: health.last_activity,
+        timestamp: new Date()
+      }
     });
     
   } catch (error) {
+    console.error('Health check error:', error);
     handleDatabaseError(error, res, 'health check');
   }
 };
+
+// Helper function to format last run time
+function formatLastRun(timestamp) {
+  if (!timestamp) return 'Never';
+  
+  const now = new Date();
+  const lastRun = new Date(timestamp);
+  const diffMs = now - lastRun;
+  const diffMins = Math.floor(diffMs / (1000 * 60));
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  
+  if (diffMins < 1) return 'Just now';
+  if (diffMins < 60) return `${diffMins} min ago`;
+  if (diffHours < 24) return `${diffHours} hours ago`;
+  if (diffDays < 7) return `${diffDays} days ago`;
+  
+  return lastRun.toLocaleDateString();
+}
 
 // Trigger manual ETL run (placeholder for future implementation)
 module.exports.triggerETL = async (req, res) => {

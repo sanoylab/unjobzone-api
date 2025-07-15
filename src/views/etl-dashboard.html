@@ -1212,35 +1212,31 @@
                 const healthData = await healthResponse.json();
                 console.log('Health data received:', healthData);
                 
-                // Get current ETL status using the health endpoint data
-                // Since the main endpoints require auth, we'll use health data and build a simple status
+                // Extract real data from the new health endpoint structure
                 const statusData = {
-                    statistics: {
-                        totalOrganizations: healthData.data.totalOrganizations || 0,
+                    statistics: healthData.data.statistics || {
+                        totalOrganizations: 0,
                         successfulOrgs: 0,
-                        runningOrgs: healthData.data.currentlyRunning || 0,
+                        runningOrgs: 0,
                         failedOrgs: 0,
                         totalJobs: 0,
                         avgDuration: 0,
                         successRate: 0
                     },
-                    organizations: [
-                        { name: 'IMF', status: 'idle', lastRun: 'Unknown', jobsProcessed: 0, duration: null },
-                        { name: 'UNHCR', status: 'idle', lastRun: 'Unknown', jobsProcessed: 0, duration: null },
-                        { name: 'WFP', status: 'idle', lastRun: 'Unknown', jobsProcessed: 0, duration: null },
-                        { name: 'INSPIRA', status: 'idle', lastRun: 'Unknown', jobsProcessed: 0, duration: null },
-                        { name: 'UNDP', status: 'idle', lastRun: 'Unknown', jobsProcessed: 0, duration: null },
-                        { name: 'UNWOMEN', status: 'idle', lastRun: 'Unknown', jobsProcessed: 0, duration: null },
-                        { name: 'ICAO', status: 'idle', lastRun: 'Unknown', jobsProcessed: 0, duration: null },
-                        { name: 'UNFPA', status: 'idle', lastRun: 'Unknown', jobsProcessed: 0, duration: null },
-                        { name: 'IOM', status: 'idle', lastRun: 'Unknown', jobsProcessed: 0, duration: null }
-                    ],
-                    systemHealth: {
-                        status: healthData.data.status,
-                        uptime: healthData.data.uptime,
-                        lastActivity: healthData.data.lastActivity
+                    organizations: healthData.data.organizations || [],
+                    systemHealth: healthData.data.systemHealth || {
+                        status: 'unknown',
+                        uptime: 0,
+                        lastActivity: null
                     }
                 };
+                
+                // Calculate success rate
+                if (statusData.statistics.totalOrganizations > 0) {
+                    statusData.statistics.successRate = Math.round(
+                        (statusData.statistics.successfulOrgs / statusData.statistics.totalOrganizations) * 100
+                    );
+                }
                 
                 // Update the dashboard with real data
                 console.log('Status data prepared:', statusData);
@@ -1267,6 +1263,8 @@
             const totalJobsEl = document.getElementById('totalJobs');
             const avgDurationEl = document.getElementById('avgDuration');
             const successRateEl = document.getElementById('successRate');
+            const lastRunEl = document.getElementById('lastRun');
+            const nextRunEl = document.getElementById('nextRun');
             
             console.log('🔍 Element check:', {
                 totalOrgs: !!totalOrgsEl,
@@ -1280,9 +1278,46 @@
             if (totalOrgsEl) totalOrgsEl.textContent = data.statistics.totalOrganizations;
             if (successfulOrgsEl) successfulOrgsEl.textContent = data.statistics.successfulOrgs;
             if (runningOrgsEl) runningOrgsEl.textContent = data.statistics.runningOrgs;
-            if (totalJobsEl) totalJobsEl.textContent = data.statistics.totalJobs || 0;
-            if (avgDurationEl) avgDurationEl.textContent = (data.statistics.avgDuration || 0) + 's';
+            if (totalJobsEl) totalJobsEl.textContent = (data.statistics.totalJobs || 0).toLocaleString();
+            
+            // Format average duration nicely
+            const avgDuration = data.statistics.avgDuration || 0;
+            let avgDurationText = '0s';
+            if (avgDuration > 0) {
+                if (avgDuration < 60) {
+                    avgDurationText = `${avgDuration}s`;
+                } else {
+                    avgDurationText = `${Math.round(avgDuration / 60)}m`;
+                }
+            }
+            if (avgDurationEl) avgDurationEl.textContent = avgDurationText;
             if (successRateEl) successRateEl.textContent = (data.statistics.successRate || 0) + '%';
+            
+            // Update last run and next run if elements exist
+            if (lastRunEl && data.systemHealth && data.systemHealth.lastActivity) {
+                const lastActivity = new Date(data.systemHealth.lastActivity);
+                lastRunEl.textContent = formatLastRun(lastActivity);
+            }
+            if (nextRunEl) {
+                // Calculate next scheduled run (6 AM or 6 PM)
+                const now = new Date();
+                const nextSixAM = new Date(now);
+                nextSixAM.setHours(6, 0, 0, 0);
+                const nextSixPM = new Date(now);
+                nextSixPM.setHours(18, 0, 0, 0);
+                
+                let nextRun;
+                if (now.getHours() < 6) {
+                    nextRun = nextSixAM;
+                } else if (now.getHours() < 18) {
+                    nextRun = nextSixPM;
+                } else {
+                    nextRun = new Date(nextSixAM.getTime() + 24 * 60 * 60 * 1000); // Next day 6 AM
+                }
+                
+                const diffHours = Math.round((nextRun - now) / (1000 * 60 * 60));
+                nextRunEl.textContent = diffHours <= 1 ? 'Soon' : `${diffHours}h`;
+            }
             
             // Update organizations container
             const orgContainer = document.getElementById('organizationsContainer');
@@ -1293,15 +1328,47 @@
                 data.organizations.forEach(org => {
                     const orgCard = document.createElement('div');
                     orgCard.className = 'org-card';
+                    
+                    // Format duration nicely
+                    let durationText = 'N/A';
+                    if (org.duration && org.duration > 0) {
+                        if (org.duration < 60) {
+                            durationText = `${org.duration}s`;
+                        } else if (org.duration < 3600) {
+                            durationText = `${Math.round(org.duration / 60)}m ${org.duration % 60}s`;
+                        } else {
+                            const hours = Math.floor(org.duration / 3600);
+                            const minutes = Math.floor((org.duration % 3600) / 60);
+                            durationText = `${hours}h ${minutes}m`;
+                        }
+                    }
+                    
+                    // Create status text with icon
+                    const statusText = org.status.charAt(0).toUpperCase() + org.status.slice(1);
+                    const statusIcon = getStatusIcon(org.status);
+                    
+                    // Show error message if failed
+                    const errorInfo = org.status === 'failed' && org.errorMessage ? 
+                        `<p><strong>Error:</strong> <span style="color: #ff6b6b; font-size: 0.9rem;">${org.errorMessage}</span></p>` : '';
+                    
+                    // Show processing stats if available
+                    const processStats = org.processedCount > 0 ? 
+                        `<p><strong>Records:</strong> ${org.processedCount} processed, ${org.successCount} success, ${org.errorCount} errors</p>` : '';
+                    
                     orgCard.innerHTML = `
                         <div class="org-header">
                             <h3>${org.name}</h3>
-                            <span class="status status-${org.status}">${org.status.charAt(0).toUpperCase() + org.status.slice(1)}</span>
+                            <span class="status status-${org.status}">
+                                <i class="fas fa-${statusIcon}"></i>
+                                ${statusText}
+                            </span>
                         </div>
                         <div class="org-details">
                             <p><strong>Last Run:</strong> ${org.lastRun}</p>
-                            <p><strong>Jobs Processed:</strong> ${org.jobsProcessed}</p>
-                            <p><strong>Duration:</strong> ${org.duration ? org.duration + 's' : 'N/A'}</p>
+                            <p><strong>Jobs in DB:</strong> ${org.jobsProcessed.toLocaleString()}</p>
+                            <p><strong>Duration:</strong> ${durationText}</p>
+                            ${processStats}
+                            ${errorInfo}
                         </div>
                     `;
                     orgContainer.appendChild(orgCard);
@@ -1505,6 +1572,8 @@
                 case 'success': return 'check-circle';
                 case 'failed': return 'times-circle';
                 case 'running': return 'sync-alt fa-spin';
+                case 'idle': return 'clock';
+                case 'error': return 'exclamation-triangle';
                 default: return 'question-circle';
             }
         }
@@ -1530,6 +1599,25 @@
                     <i class="fas fa-exclamation-triangle"></i> ${message}
                 </div>`;
             });
+        }
+        
+        // Helper function to format last run time (matches backend implementation)
+        function formatLastRun(timestamp) {
+            if (!timestamp) return 'Never';
+            
+            const now = new Date();
+            const lastRun = new Date(timestamp);
+            const diffMs = now - lastRun;
+            const diffMins = Math.floor(diffMs / (1000 * 60));
+            const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+            const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+            
+            if (diffMins < 1) return 'Just now';
+            if (diffMins < 60) return `${diffMins} min ago`;
+            if (diffHours < 24) return `${diffHours} hours ago`;
+            if (diffDays < 7) return `${diffDays} days ago`;
+            
+            return lastRun.toLocaleDateString();
         }
 
         // Cleanup on page unload
