@@ -14,7 +14,7 @@
  * Safety Features:
  *   - Dry run mode to preview changes
  *   - Detailed logging and statistics
- *   - Only removes jobs where end_date < CURRENT_DATE
+ *   - Only removes jobs where end_date < NOW()
  *   - Preserves all active jobs (end_date >= today)
  */
 

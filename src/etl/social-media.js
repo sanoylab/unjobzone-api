@@ -270,7 +270,7 @@ module.exports.postExpiringSoonJobPostsToLinkedIn = async () => {
       FROM 
         public.job_vacancies
       WHERE 
-        end_date = CURRENT_DATE OR end_date = CURRENT_DATE + INTERVAL '1 day'
+        DATE(end_date) = CURRENT_DATE OR DATE(end_date) = CURRENT_DATE + INTERVAL '1 day'
       ORDER BY organization_id, created DESC
       LIMIT 5
     `;
@@ -295,7 +295,7 @@ module.exports.postExpiringSoonJobPostsToLinkedIn = async () => {
         FROM 
           public.job_vacancies
         WHERE 
-          end_date = CURRENT_DATE OR end_date = CURRENT_DATE + INTERVAL '1 day'
+          DATE(end_date) = CURRENT_DATE OR DATE(end_date) = CURRENT_DATE + INTERVAL '1 day'
         ORDER BY created DESC
         LIMIT ${remainingSlots}
       `;

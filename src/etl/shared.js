@@ -523,7 +523,7 @@ const getETLHistory = async (organizationName, limit = 10) => {
  * Expired Job Cleanup - Remove jobs past their end_date
  */
 
-// Cleanup expired jobs where end_date < CURRENT_DATE
+// Cleanup expired jobs where end_date < NOW()
 const cleanupExpiredJobs = async (client = null, dryRun = false) => {
   let ownClient = false;
   
@@ -557,7 +557,7 @@ const cleanupExpiredJobs = async (client = null, dryRun = false) => {
         MIN(end_date) as oldest_expired,
         MAX(end_date) as newest_expired
       FROM job_vacancies 
-      WHERE end_date < CURRENT_DATE
+      WHERE end_date < NOW()
       GROUP BY data_source
       ORDER BY expired_count DESC
     `;
@@ -601,7 +601,7 @@ const cleanupExpiredJobs = async (client = null, dryRun = false) => {
     // Delete expired jobs with proper error handling
     const deleteQuery = `
       DELETE FROM job_vacancies 
-      WHERE end_date < CURRENT_DATE
+      WHERE end_date < NOW()
       RETURNING data_source, job_id, job_title, end_date
     `;
 
