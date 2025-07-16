@@ -8,61 +8,88 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>ETL Dashboard - UN Job Zone</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
         :root {
-            /* Advanced Gradient System */
-            --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            --secondary-gradient: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-            --success-gradient: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
-            --warning-gradient: linear-gradient(135deg, #fce38a 0%, #f38ba8 100%);
-            --danger-gradient: linear-gradient(135deg, #fc466b 0%, #3f5efb 100%);
-            --info-gradient: linear-gradient(135deg, #09c6f9 0%, #045de9 100%);
-            --dark-gradient: linear-gradient(135deg, #232526 0%, #414345 100%);
+            /* Modern Minimal Color Palette */
+            --primary: #2563eb;
+            --primary-light: #3b82f6;
+            --primary-dark: #1d4ed8;
+            --accent: #06b6d4;
+            --accent-light: #22d3ee;
             
-            /* Cyberpunk Gradients */
-            --cyber-blue: linear-gradient(135deg, #0f3460 0%, #0f4c75 50%, #3282b8 100%);
-            --cyber-purple: linear-gradient(135deg, #8e2de2 0%, #4a00e0 100%);
-            --cyber-orange: linear-gradient(135deg, #ff9a00 0%, #ff6200 100%);
-            --cyber-green: linear-gradient(135deg, #56ab2f 0%, #a8e6cf 100%);
+            /* Neutral Grays */
+            --gray-50: #f9fafb;
+            --gray-100: #f3f4f6;
+            --gray-200: #e5e7eb;
+            --gray-300: #d1d5db;
+            --gray-400: #9ca3af;
+            --gray-500: #6b7280;
+            --gray-600: #4b5563;
+            --gray-700: #374151;
+            --gray-800: #1f2937;
+            --gray-900: #111827;
             
-            /* Advanced Glass Morphism */
-            --glass-bg: rgba(255, 255, 255, 0.08);
-            --glass-bg-strong: rgba(255, 255, 255, 0.12);
-            --glass-border: rgba(255, 255, 255, 0.15);
-            --glass-border-strong: rgba(255, 255, 255, 0.25);
-            --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
-            --glass-shadow-strong: 0 15px 35px rgba(31, 38, 135, 0.5);
-            --glass-shadow-glow: 0 0 40px rgba(139, 69, 19, 0.3);
+            /* Status Colors */
+            --success: #10b981;
+            --success-light: #34d399;
+            --warning: #f59e0b;
+            --warning-light: #fbbf24;
+            --error: #ef4444;
+            --error-light: #f87171;
+            --info: #8b5cf6;
+            --info-light: #a78bfa;
             
-            /* Enhanced Typography */
-            --text-primary: #ffffff;
-            --text-secondary: rgba(255, 255, 255, 0.85);
-            --text-muted: rgba(255, 255, 255, 0.65);
-            --text-accent: #00f2fe;
-            --text-glow: 0 0 20px rgba(0, 242, 254, 0.5);
+            /* Background & Surface */
+            --bg-primary: #ffffff;
+            --bg-secondary: var(--gray-50);
+            --bg-card: #ffffff;
+            --bg-elevated: #ffffff;
             
-            /* Modern Border Radius System */
-            --border-radius: 24px;
-            --border-radius-lg: 32px;
-            --border-radius-xl: 40px;
-            --border-radius-sm: 16px;
-            --border-radius-xs: 12px;
+            /* Text Colors */
+            --text-primary: var(--gray-900);
+            --text-secondary: var(--gray-600);
+            --text-tertiary: var(--gray-500);
+            --text-inverse: #ffffff;
             
-            /* Advanced Animation System */
-            --transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
-            --transition-fast: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
-            --transition-slow: all 0.6s cubic-bezier(0.25, 0.8, 0.25, 1);
-            --bounce: cubic-bezier(0.68, -0.55, 0.265, 1.55);
+            /* Borders */
+            --border-light: var(--gray-200);
+            --border-medium: var(--gray-300);
+            --border-strong: var(--gray-400);
             
-            /* Spacing System */
-            --space-xs: 0.5rem;
-            --space-sm: 1rem;
-            --space-md: 1.5rem;
-            --space-lg: 2rem;
-            --space-xl: 3rem;
-            --space-2xl: 4rem;
+            /* Shadows */
+            --shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+            --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1);
+            --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+            --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+            
+            /* Spacing */
+            --space-1: 0.25rem;
+            --space-2: 0.5rem;
+            --space-3: 0.75rem;
+            --space-4: 1rem;
+            --space-5: 1.25rem;
+            --space-6: 1.5rem;
+            --space-8: 2rem;
+            --space-10: 2.5rem;
+            --space-12: 3rem;
+            --space-16: 4rem;
+            --space-20: 5rem;
+            
+            /* Border Radius */
+            --radius-sm: 0.25rem;
+            --radius: 0.375rem;
+            --radius-md: 0.5rem;
+            --radius-lg: 0.75rem;
+            --radius-xl: 1rem;
+            --radius-2xl: 1.5rem;
+            --radius-full: 9999px;
+            
+            /* Transitions */
+            --transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+            --transition-slow: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         * {
@@ -73,662 +100,362 @@
 
         body {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            background: 
-                radial-gradient(circle at 20% 80%, rgba(120, 119, 198, 0.3) 0%, transparent 50%),
-                radial-gradient(circle at 80% 20%, rgba(255, 119, 198, 0.3) 0%, transparent 50%),
-                radial-gradient(circle at 40% 40%, rgba(120, 219, 255, 0.2) 0%, transparent 50%),
-                linear-gradient(135deg, #0f0f23 0%, #1a1a2e 25%, #16213e 50%, #0f0f23 100%);
-            background-size: 400% 400%;
-            background-attachment: fixed;
-            animation: gradientShift 20s ease infinite;
-            min-height: 100vh;
+            background: var(--bg-secondary);
             color: var(--text-primary);
-            overflow-x: hidden;
-            font-weight: 400;
-            line-height: 1.6;
-            position: relative;
-        }
-
-        body::before {
-            content: '';
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: 
-                radial-gradient(2px 2px at 20px 30px, rgba(255, 255, 255, 0.1), transparent),
-                radial-gradient(2px 2px at 40px 70px, rgba(255, 255, 255, 0.05), transparent),
-                radial-gradient(1px 1px at 90px 40px, rgba(255, 255, 255, 0.08), transparent),
-                radial-gradient(1px 1px at 130px 80px, rgba(255, 255, 255, 0.03), transparent),
-                radial-gradient(3px 3px at 200px 120px, rgba(0, 242, 254, 0.05), transparent),
-                radial-gradient(2px 2px at 300px 200px, rgba(142, 45, 226, 0.03), transparent);
-            background-repeat: repeat;
-            background-size: 300px 300px;
-            animation: floating 30s linear infinite;
-            pointer-events: none;
-            z-index: 1;
-        }
-        
-        /* Enhanced Gradient Shift Animation */
-        @keyframes gradientShift {
-            0%, 100% { background-position: 0% 50%; }
-            50% { background-position: 100% 50%; }
-        }
-        
-        /* Floating particles animation */
-        @keyframes floating {
-            0% { transform: translate(0, 0) rotate(0deg); }
-            100% { transform: translate(-300px, -300px) rotate(360deg); }
-        }
-        
-        /* Float animation for stat icons */
-        @keyframes float {
-            0%, 100% { transform: translateY(0px); }
-            50% { transform: translateY(-10px); }
-        }
-        
-        /* Rotate animation for icon borders */
-        @keyframes rotate {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        
-        /* Glow animation */
-        @keyframes glow {
-            from { text-shadow: 0 0 40px rgba(0, 242, 254, 0.5); }
-            to { text-shadow: 0 0 60px rgba(0, 242, 254, 0.8); }
+            font-size: 14px;
+            line-height: 1.5;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            min-height: 100vh;
         }
 
         .container {
-            max-width: 1600px;
+            max-width: 1280px;
             margin: 0 auto;
-            padding: var(--space-xl) var(--space-lg);
-            position: relative;
-            z-index: 10;
+            padding: var(--space-8) var(--space-6);
         }
 
+        /* Modern Header */
         .header {
-            text-align: center;
-            margin-bottom: var(--space-2xl);
-            position: relative;
-            padding: var(--space-xl) 0;
+            background: var(--bg-card);
+            border: 1px solid var(--border-light);
+            border-radius: var(--radius-xl);
+            padding: var(--space-10) var(--space-8);
+            margin-bottom: var(--space-8);
+            box-shadow: var(--shadow-sm);
         }
 
-        .header::before {
-            content: '';
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 600px;
-            height: 400px;
-            background: 
-                radial-gradient(ellipse 300px 200px at center, rgba(0, 242, 254, 0.1) 0%, transparent 60%),
-                radial-gradient(ellipse 400px 250px at center, rgba(142, 45, 226, 0.08) 0%, transparent 70%);
-            border-radius: 50%;
-            z-index: -1;
-            animation: pulseGlow 4s ease-in-out infinite;
+        .header-content {
+            text-align: center;
         }
 
         .header h1 {
-            font-size: clamp(2.5rem, 5vw, 4.5rem);
-            font-weight: 900;
-            background: linear-gradient(135deg, #ffffff 0%, #00f2fe 50%, #ffffff 100%);
-            background-size: 200% 200%;
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            margin-bottom: var(--space-sm);
-            text-shadow: 0 0 40px rgba(0, 242, 254, 0.5);
-            animation: gradientText 3s ease infinite, glow 2s ease-in-out infinite alternate;
-            letter-spacing: -0.02em;
-            line-height: 1.1;
-        }
-        
-        @keyframes gradientText {
-            0%, 100% { background-position: 0% 50%; }
-            50% { background-position: 100% 50%; }
-        }
-        
-        @keyframes pulseGlow {
-            0%, 100% { 
-                transform: translate(-50%, -50%) scale(1);
-                opacity: 0.6;
-            }
-            50% { 
-                transform: translate(-50%, -50%) scale(1.1);
-                opacity: 0.8;
-            }
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: var(--space-3);
+            letter-spacing: -0.025em;
         }
 
-        @keyframes glow {
-            from { text-shadow: 0 0 30px rgba(255,255,255,0.3); }
-            to { text-shadow: 0 0 50px rgba(255,255,255,0.5); }
-        }
-
-        .header p {
-            font-size: 1.25rem;
+        .header-subtitle {
+            font-size: 1.125rem;
             color: var(--text-secondary);
+            margin-bottom: var(--space-6);
             font-weight: 400;
-            margin-bottom: 2rem;
         }
 
-        .last-updated {
+        .status-indicator {
             display: inline-flex;
             align-items: center;
-            gap: 0.5rem;
-            background: var(--glass-bg);
-            backdrop-filter: blur(10px);
-            border: 1px solid var(--glass-border);
-            border-radius: var(--border-radius-sm);
-            padding: 0.75rem 1.5rem;
-            font-size: 0.9rem;
+            gap: var(--space-2);
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-light);
+            border-radius: var(--radius-full);
+            padding: var(--space-2) var(--space-4);
+            font-size: 0.875rem;
             color: var(--text-secondary);
-            box-shadow: var(--glass-shadow);
-            transition: var(--transition);
+            font-weight: 500;
         }
 
-        .last-updated:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 12px 40px 0 rgba(31, 38, 135, 0.4);
-        }
-
-        .pulse {
+        .status-dot {
             width: 8px;
             height: 8px;
-            background: #00f2fe;
+            background: var(--success);
             border-radius: 50%;
             animation: pulse 2s ease-in-out infinite;
         }
 
-        @keyframes pulse {
-            0%, 100% { opacity: 1; transform: scale(1); }
-            50% { opacity: 0.5; transform: scale(1.2); }
+        /* Statistics Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: var(--space-6);
+            margin-bottom: var(--space-8);
         }
 
-        /* Organization cards styling */
-        .org-card {
-            background: var(--glass-bg-strong);
-            backdrop-filter: blur(20px);
-            border: 1px solid var(--glass-border);
-            border-radius: var(--border-radius-lg);
-            padding: var(--space-xl);
-            margin-bottom: var(--space-md);
+        .stat-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-light);
+            border-radius: var(--radius-lg);
+            padding: var(--space-6);
             transition: var(--transition);
-            box-shadow: var(--glass-shadow-strong);
             position: relative;
-            overflow: hidden;
-            cursor: pointer;
+            box-shadow: var(--shadow-xs);
         }
-        
-        .org-card::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 3px;
-            background: var(--cyber-blue);
-            transform: scaleX(0);
-            transform-origin: left;
-            transition: transform 0.3s ease;
+
+        .stat-card:hover {
+            box-shadow: var(--shadow-md);
+            transform: translateY(-2px);
+            border-color: var(--border-medium);
+        }
+
+        .stat-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: var(--space-4);
+        }
+
+        .stat-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: var(--radius-lg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.25rem;
+            color: var(--text-inverse);
+            transition: var(--transition);
+        }
+
+        .stat-card:nth-child(1) .stat-icon { background: var(--primary); }
+        .stat-card:nth-child(2) .stat-icon { background: var(--success); }
+        .stat-card:nth-child(3) .stat-icon { background: var(--warning); }
+        .stat-card:nth-child(4) .stat-icon { background: var(--info); }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: var(--space-1);
+            line-height: 1;
+        }
+
+        .stat-label {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .stat-change {
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--success);
+        }
+
+        /* Main Layout */
+        .main-layout {
+            display: grid;
+            grid-template-columns: 1fr 400px;
+            gap: var(--space-8);
+            margin-bottom: var(--space-8);
+        }
+
+        .panel {
+            background: var(--bg-card);
+            border: 1px solid var(--border-light);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-xs);
+            overflow: hidden;
+        }
+
+        .panel-header {
+            padding: var(--space-6) var(--space-6) var(--space-4);
+            border-bottom: 1px solid var(--border-light);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .panel-title {
+            font-size: 1.125rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: var(--space-2);
+        }
+
+        .panel-title i {
+            color: var(--text-secondary);
+            font-size: 1rem;
+        }
+
+        .panel-content {
+            padding: var(--space-6);
+        }
+
+        .refresh-btn {
+            background: var(--primary);
+            border: none;
+            border-radius: var(--radius);
+            padding: var(--space-2) var(--space-4);
+            color: var(--text-inverse);
+            font-weight: 500;
+            font-size: 0.875rem;
+            cursor: pointer;
+            transition: var(--transition);
+            display: flex;
+            align-items: center;
+            gap: var(--space-2);
+        }
+
+        .refresh-btn:hover {
+            background: var(--primary-dark);
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-md);
+        }
+
+        .refresh-btn:active {
+            transform: translateY(0);
+        }
+
+        /* Organization Cards */
+        .org-list {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-4);
+        }
+
+        .org-card {
+            background: var(--bg-elevated);
+            border: 1px solid var(--border-light);
+            border-radius: var(--radius-lg);
+            padding: var(--space-5);
+            transition: var(--transition);
+            position: relative;
         }
 
         .org-card:hover {
-            transform: translateY(-8px) scale(1.02);
-            box-shadow: 
-                0 20px 60px 0 rgba(31, 38, 135, 0.5),
-                0 0 40px rgba(0, 242, 254, 0.2);
-            border-color: rgba(0, 242, 254, 0.3);
-        }
-        
-        .org-card:hover::before {
-            transform: scaleX(1);
+            border-color: var(--border-medium);
+            box-shadow: var(--shadow-sm);
+            transform: translateY(-1px);
         }
 
         .org-header {
             display: flex;
+            align-items: flex-start;
             justify-content: space-between;
-            align-items: center;
-            margin-bottom: var(--space-md);
-            position: relative;
-            z-index: 2;
+            margin-bottom: var(--space-3);
         }
 
-        .org-header h3 {
-            margin: 0;
+        .org-name {
+            font-size: 1rem;
+            font-weight: 600;
             color: var(--text-primary);
-            font-size: 1.4rem;
-            font-weight: 700;
-            background: linear-gradient(135deg, #ffffff 0%, #00f2fe 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
+            margin: 0;
+        }
+
+        .org-status {
+            padding: var(--space-1) var(--space-3);
+            border-radius: var(--radius-full);
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            display: flex;
+            align-items: center;
+            gap: var(--space-1);
+        }
+
+        .org-status.success {
+            background: rgba(16, 185, 129, 0.1);
+            color: var(--success);
+            border: 1px solid rgba(16, 185, 129, 0.2);
+        }
+
+        .org-status.running {
+            background: rgba(245, 158, 11, 0.1);
+            color: var(--warning);
+            border: 1px solid rgba(245, 158, 11, 0.2);
+        }
+
+        .org-status.failed {
+            background: rgba(239, 68, 68, 0.1);
+            color: var(--error);
+            border: 1px solid rgba(239, 68, 68, 0.2);
+        }
+
+        .org-status.idle {
+            background: rgba(107, 114, 128, 0.1);
+            color: var(--text-secondary);
+            border: 1px solid rgba(107, 114, 128, 0.2);
         }
 
         .org-details {
-            position: relative;
-            z-index: 2;
-        }
-
-        .org-details p {
-            margin: var(--space-xs) 0;
-            color: var(--text-secondary);
-            font-size: 1rem;
-            transition: var(--transition-fast);
-        }
-
-        .org-details strong {
-            color: var(--text-primary);
-            font-weight: 600;
-        }
-        
-        .org-card:hover .org-details p {
-            color: var(--text-primary);
-        }
-
-        .stats-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-            gap: var(--space-lg);
-            margin-bottom: var(--space-2xl);
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: var(--space-3);
         }
 
-        .stat-card {
-            background: var(--glass-bg-strong);
-            backdrop-filter: blur(20px);
-            border: 1px solid var(--glass-border-strong);
-            border-radius: var(--border-radius-lg);
-            padding: var(--space-xl);
-            text-align: center;
-            position: relative;
-            overflow: hidden;
-            transition: var(--transition);
-            box-shadow: var(--glass-shadow-strong);
-            cursor: pointer;
-            transform-style: preserve-3d;
-        }
-        
-        .stat-card::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: linear-gradient(45deg, transparent 30%, rgba(255, 255, 255, 0.1) 50%, transparent 70%);
-            transform: translateX(-100%);
-            transition: transform 0.6s ease;
-            z-index: 1;
-        }
-
-        .stat-card:hover::before {
-            transform: translateX(100%);
-        }
-
-        .stat-card:hover {
-            transform: translateY(-12px) rotateX(5deg) rotateY(5deg) scale(1.03);
-            box-shadow: 
-                0 25px 80px 0 rgba(31, 38, 135, 0.6),
-                0 0 50px rgba(0, 242, 254, 0.3);
-            border-color: rgba(0, 242, 254, 0.5);
-        }
-
-        .stat-icon {
-            width: 100px;
-            height: 100px;
-            margin: 0 auto var(--space-md);
-            background: var(--cyber-blue);
-            border-radius: 50%;
+        .org-metric {
             display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 2.5rem;
-            color: white;
-            box-shadow: 
-                0 15px 40px rgba(15, 52, 96, 0.4),
-                0 0 30px rgba(0, 242, 254, 0.2);
-            animation: float 4s ease-in-out infinite;
-            position: relative;
-            z-index: 2;
-            transition: var(--transition);
-        }
-        
-        .stat-icon::before {
-            content: '';
-            position: absolute;
-            top: -5px;
-            left: -5px;
-            right: -5px;
-            bottom: -5px;
-            background: conic-gradient(from 0deg, transparent, rgba(0, 242, 254, 0.3), transparent);
-            border-radius: 50%;
-            z-index: -1;
-            animation: rotate 6s linear infinite;
-        }
-        
-        .stat-card:hover .stat-icon {
-            transform: scale(1.1) rotateY(15deg);
-            box-shadow: 
-                0 20px 50px rgba(15, 52, 96, 0.6),
-                0 0 40px rgba(0, 242, 254, 0.4);
+            flex-direction: column;
         }
 
-        @keyframes float {
-            0%, 100% { transform: translateY(0px); }
-            50% { transform: translateY(-10px); }
-        }
-
-        .stat-card:nth-child(2) .stat-icon {
-            background: var(--success-gradient);
-            animation-delay: 0.5s;
-        }
-
-        .stat-card:nth-child(3) .stat-icon {
-            background: var(--warning-gradient);
-            animation-delay: 1s;
-        }
-
-        .stat-card:nth-child(4) .stat-icon {
-            background: var(--danger-gradient);
-            animation-delay: 1.5s;
-        }
-
-        .stat-number {
-            font-size: clamp(2.5rem, 4vw, 3.5rem);
-            font-weight: 900;
-            margin-bottom: var(--space-sm);
-            background: linear-gradient(135deg, #ffffff 0%, #00f2fe 50%, #ffffff 100%);
-            background-size: 200% 200%;
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            animation: gradientText 4s ease infinite;
-            text-shadow: 0 0 30px rgba(0, 242, 254, 0.3);
-            line-height: 1;
-            position: relative;
-            z-index: 2;
-        }
-
-        .stat-label {
-            font-size: 1rem;
-            color: var(--text-secondary);
-            font-weight: 600;
+        .org-metric-label {
+            font-size: 0.75rem;
+            color: var(--text-tertiary);
             text-transform: uppercase;
-            letter-spacing: 1.5px;
-            position: relative;
-            z-index: 2;
-            transition: var(--transition-fast);
-        }
-        
-        .stat-card:hover .stat-label {
-            color: var(--text-accent);
+            letter-spacing: 0.05em;
+            font-weight: 500;
+            margin-bottom: var(--space-1);
         }
 
-        .main-content {
-            display: grid;
-            grid-template-columns: 1fr 400px;
-            gap: 3rem;
-            margin-bottom: 3rem;
-        }
-
-        .organizations-panel {
-            background: var(--glass-bg);
-            backdrop-filter: blur(15px);
-            border: 1px solid var(--glass-border);
-            border-radius: var(--border-radius);
-            padding: 2rem;
-            box-shadow: var(--glass-shadow);
-            position: relative;
-            overflow: hidden;
-        }
-
-        .organizations-panel::before {
-            content: '';
-            position: absolute;
-            top: -50%;
-            right: -50%;
-            width: 100%;
-            height: 100%;
-            background: radial-gradient(circle, rgba(255,255,255,0.05) 0%, transparent 70%);
-            animation: rotate 20s linear infinite;
-        }
-
-        @keyframes rotate {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
-        }
-
-        .panel-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 2rem;
-            position: relative;
-            z-index: 1;
-        }
-
-        .panel-title {
-            font-size: 1.5rem;
-            font-weight: 700;
+        .org-metric-value {
+            font-size: 0.875rem;
             color: var(--text-primary);
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-        }
-
-        .organization-item {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 1.5rem;
-            margin-bottom: 1rem;
-            background: rgba(255, 255, 255, 0.08);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: var(--border-radius-sm);
-            transition: var(--transition);
-            position: relative;
-            overflow: hidden;
-        }
-
-        .organization-item::before {
-            content: '';
-            position: absolute;
-            left: 0;
-            top: 0;
-            height: 100%;
-            width: 4px;
-            background: var(--primary-gradient);
-            opacity: 0;
-            transition: var(--transition);
-        }
-
-        .organization-item:hover::before {
-            opacity: 1;
-        }
-
-        .organization-item:hover {
-            transform: translateX(8px);
-            background: rgba(255, 255, 255, 0.12);
-            border-color: rgba(255, 255, 255, 0.2);
-        }
-
-        .org-info {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-        }
-
-        .org-avatar {
-            width: 50px;
-            height: 50px;
-            border-radius: 50%;
-            background: var(--primary-gradient);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 700;
-            color: white;
-            font-size: 1.25rem;
-            box-shadow: 0 4px 20px rgba(102, 126, 234, 0.3);
-        }
-
-        .org-details h4 {
-            font-size: 1.1rem;
             font-weight: 600;
-            margin-bottom: 0.25rem;
-            color: var(--text-primary);
         }
 
-        .org-details p {
-            font-size: 0.9rem;
-            color: var(--text-muted);
-        }
-
-        .status-badge, .status {
-            padding: var(--space-xs) var(--space-md);
-            border-radius: 30px;
-            font-size: 0.9rem;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            display: inline-flex;
-            align-items: center;
-            gap: var(--space-xs);
-            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
-            position: relative;
-            overflow: hidden;
-            transition: var(--transition-fast);
-        }
-        
-        .status-badge::before, .status::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: -100%;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
-            transition: left 0.5s ease;
-        }
-        
-        .status-badge:hover::before, .status:hover::before {
-            left: 100%;
-        }
-
-        .status-success {
-            background: linear-gradient(135deg, rgba(17, 153, 142, 0.3), rgba(56, 239, 125, 0.3));
-            color: #38ef7d;
-            border: 1px solid rgba(56, 239, 125, 0.5);
-            box-shadow: 0 0 20px rgba(56, 239, 125, 0.3);
-        }
-
-        .status-failed {
-            background: linear-gradient(135deg, rgba(252, 70, 107, 0.3), rgba(63, 94, 251, 0.3));
-            color: #fc466b;
-            border: 1px solid rgba(252, 70, 107, 0.5);
-            box-shadow: 0 0 20px rgba(252, 70, 107, 0.3);
-        }
-
-        .status-running {
-            background: linear-gradient(135deg, rgba(252, 227, 138, 0.3), rgba(243, 139, 168, 0.3));
-            color: #fce38a;
-            border: 1px solid rgba(252, 227, 138, 0.5);
-            box-shadow: 0 0 20px rgba(252, 227, 138, 0.3);
-            animation: statusPulse 2s infinite;
-        }
-
-        .status-idle {
-            background: linear-gradient(135deg, rgba(9, 198, 249, 0.3), rgba(4, 93, 233, 0.3));
-            color: #09c6f9;
-            border: 1px solid rgba(9, 198, 249, 0.5);
-            box-shadow: 0 0 20px rgba(9, 198, 249, 0.3);
-        }
-
-        .status-error {
-            background: linear-gradient(135deg, rgba(255, 154, 0, 0.3), rgba(255, 98, 0, 0.3));
-            color: #ff9a00;
-            border: 1px solid rgba(255, 154, 0, 0.5);
-            box-shadow: 0 0 20px rgba(255, 154, 0, 0.3);
-        }
-        
-        @keyframes statusPulse {
-            0%, 100% { 
-                box-shadow: 0 0 20px rgba(252, 227, 138, 0.3);
-                transform: scale(1);
-            }
-            50% { 
-                box-shadow: 0 0 30px rgba(252, 227, 138, 0.6);
-                transform: scale(1.05);
-            }
-        }
-
-        .charts-panel {
-            background: var(--glass-bg);
-            backdrop-filter: blur(15px);
-            border: 1px solid var(--glass-border);
-            border-radius: var(--border-radius);
-            padding: 2rem;
-            box-shadow: var(--glass-shadow);
-            position: relative;
+        /* Charts Panel */
+        .chart-panel {
+            padding: 0;
         }
 
         .chart-container {
-            position: relative;
             height: 300px;
-            margin-bottom: 2rem;
+            padding: var(--space-4);
         }
 
-        .performance-metrics {
+        .metrics-grid {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
-            gap: 1.5rem;
+            border-top: 1px solid var(--border-light);
         }
 
         .metric-item {
+            padding: var(--space-4);
             text-align: center;
-            padding: 1.5rem;
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: var(--border-radius-sm);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            transition: var(--transition);
+            border-right: 1px solid var(--border-light);
+            border-bottom: 1px solid var(--border-light);
         }
 
-        .metric-item:hover {
-            background: rgba(255, 255, 255, 0.1);
-            transform: translateY(-4px);
+        .metric-item:nth-child(2n) {
+            border-right: none;
+        }
+
+        .metric-item:nth-child(n+3) {
+            border-bottom: none;
         }
 
         .metric-value {
-            font-size: 2rem;
+            font-size: 1.5rem;
             font-weight: 700;
             color: var(--text-primary);
-            margin-bottom: 0.5rem;
+            margin-bottom: var(--space-1);
         }
 
         .metric-label {
-            font-size: 0.9rem;
+            font-size: 0.75rem;
             color: var(--text-secondary);
             text-transform: uppercase;
-            letter-spacing: 0.5px;
+            letter-spacing: 0.05em;
+            font-weight: 500;
         }
 
-        .recent-activity {
-            background: var(--glass-bg);
-            backdrop-filter: blur(15px);
-            border: 1px solid var(--glass-border);
-            border-radius: var(--border-radius);
-            padding: 2rem;
-            box-shadow: var(--glass-shadow);
+        /* Recent Activity */
+        .activity-list {
+            display: flex;
+            flex-direction: column;
         }
 
         .activity-item {
             display: flex;
-            align-items: center;
-            gap: 1rem;
-            padding: 1rem 0;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            align-items: flex-start;
+            gap: var(--space-4);
+            padding: var(--space-4) 0;
+            border-bottom: 1px solid var(--border-light);
             transition: var(--transition);
         }
 
@@ -737,515 +464,253 @@
         }
 
         .activity-item:hover {
-            background: rgba(255, 255, 255, 0.05);
-            margin: 0 -1rem;
-            padding: 1rem;
-            border-radius: var(--border-radius-sm);
+            background: var(--bg-secondary);
+            margin: 0 calc(-1 * var(--space-6));
+            padding: var(--space-4) var(--space-6);
+            border-radius: var(--radius);
         }
 
         .activity-icon {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
+            width: 36px;
+            height: 36px;
+            border-radius: var(--radius-lg);
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 1rem;
-            color: white;
+            font-size: 0.875rem;
+            color: var(--text-inverse);
             flex-shrink: 0;
         }
 
         .activity-content {
             flex: 1;
+            min-width: 0;
         }
 
         .activity-title {
-            font-size: 1rem;
+            font-size: 0.875rem;
             font-weight: 600;
             color: var(--text-primary);
-            margin-bottom: 0.25rem;
+            margin-bottom: var(--space-1);
+            line-height: 1.4;
+        }
+
+        .activity-subtitle {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            line-height: 1.4;
         }
 
         .activity-time {
-            font-size: 0.85rem;
-            color: var(--text-muted);
+            font-size: 0.75rem;
+            color: var(--text-tertiary);
+            white-space: nowrap;
         }
 
+        /* Loading States */
         .loading-spinner {
             display: inline-block;
             width: 20px;
             height: 20px;
-            border: 2px solid rgba(255,255,255,0.3);
+            border: 2px solid var(--border-light);
             border-radius: 50%;
-            border-top-color: #ffffff;
+            border-top-color: var(--primary);
             animation: spin 1s ease-in-out infinite;
+        }
+
+        .loading-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: var(--space-12) var(--space-6);
+            text-align: center;
+        }
+
+        .loading-state p {
+            margin-top: var(--space-3);
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+        }
+
+        .error-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: var(--space-8) var(--space-6);
+            text-align: center;
+            background: rgba(239, 68, 68, 0.05);
+            border: 1px solid rgba(239, 68, 68, 0.1);
+            border-radius: var(--radius-lg);
+            margin: var(--space-4) 0;
+        }
+
+        .error-state i {
+            font-size: 2rem;
+            color: var(--error);
+            margin-bottom: var(--space-3);
+        }
+
+        .error-state p {
+            color: var(--error);
+            font-weight: 500;
+        }
+
+        /* Animations */
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
         }
 
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
 
-        .error-message {
-            background: rgba(250, 112, 154, 0.1);
-            border: 1px solid rgba(250, 112, 154, 0.3);
-            border-radius: var(--border-radius-sm);
-            padding: 1rem;
-            color: #fa709a;
-            text-align: center;
-            margin: 1rem 0;
-        }
-
-        .refresh-btn {
-            background: var(--primary-gradient);
-            border: none;
-            border-radius: 50px;
-            padding: 0.75rem 1.5rem;
-            color: white;
-            font-weight: 600;
-            cursor: pointer;
-            transition: var(--transition);
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            box-shadow: 0 4px 20px rgba(102, 126, 234, 0.3);
-        }
-
-        .refresh-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 30px rgba(102, 126, 234, 0.4);
-        }
-
-        .refresh-btn:active {
-            transform: translateY(0);
-        }
-
-        /* Enhanced Mobile Responsiveness */
-        @media (max-width: 1200px) {
-            .main-content {
+        /* Responsive Design */
+        @media (max-width: 1024px) {
+            .main-layout {
                 grid-template-columns: 1fr;
-                gap: 2rem;
             }
             
             .container {
-                padding: var(--space-lg) var(--space-md);
-            }
-            
-            .stats-grid {
-                grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-                gap: var(--space-md);
+                padding: var(--space-6) var(--space-4);
             }
         }
 
         @media (max-width: 768px) {
             .container {
-                padding: var(--space-md) var(--space-sm);
+                padding: var(--space-4) var(--space-3);
             }
 
             .header {
-                padding: var(--space-lg) 0;
-                margin-bottom: var(--space-xl);
+                padding: var(--space-6) var(--space-5);
+                margin-bottom: var(--space-6);
             }
-            
+
             .header h1 {
-                font-size: clamp(2rem, 6vw, 3rem);
-                margin-bottom: var(--space-sm);
-            }
-            
-            .header p {
-                font-size: 1rem;
-                margin-bottom: var(--space-md);
+                font-size: 2rem;
             }
 
             .stats-grid {
                 grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-                gap: var(--space-md);
+                gap: var(--space-4);
             }
 
-            .stat-card {
-                padding: var(--space-lg);
-                transform: none !important; /* Disable 3D transforms on mobile */
-            }
-            
-            .stat-card:hover {
-                transform: translateY(-4px) !important; /* Simpler hover effect */
+            .org-details {
+                grid-template-columns: 1fr;
+                gap: var(--space-2);
             }
 
-            .stat-icon {
-                width: 80px;
-                height: 80px;
-                font-size: 2rem;
+            .metrics-grid {
+                grid-template-columns: 1fr;
             }
 
-            .stat-number {
-                font-size: clamp(2rem, 8vw, 2.5rem);
-            }
-
-            .org-card {
-                padding: var(--space-lg);
-                margin-bottom: var(--space-md);
-                transform: none !important; /* Disable 3D transforms on mobile */
-            }
-            
-            .org-card:hover {
-                transform: translateY(-4px) !important; /* Simpler hover effect */
-            }
-
-            .organizations-panel, .charts-panel, .recent-activity {
-                padding: var(--space-md);
-                margin-bottom: var(--space-md);
-            }
-
-            .performance-metrics {
-                grid-template-columns: repeat(2, 1fr);
-                gap: var(--space-sm);
-            }
-            
             .metric-item {
-                padding: var(--space-md);
+                border-right: none;
+                border-bottom: 1px solid var(--border-light);
             }
-            
-            .metric-value {
-                font-size: 1.5rem;
-            }
-            
-            .activity-item {
-                padding: var(--space-sm) 0;
-                flex-wrap: wrap;
-            }
-            
-            .activity-icon {
-                width: 35px;
-                height: 35px;
-                flex-shrink: 0;
-            }
-            
-            .activity-content {
-                flex: 1;
-                min-width: 0; /* Allow text to wrap */
-            }
-            
-            .activity-title {
-                font-size: 0.9rem;
-                line-height: 1.3;
-            }
-            
-            .activity-time {
-                font-size: 0.8rem;
+
+            .metric-item:last-child {
+                border-bottom: none;
             }
         }
 
         @media (max-width: 480px) {
-            .container {
-                padding: var(--space-sm);
-            }
-            
-            .header {
-                text-align: center;
-                padding: var(--space-md) 0;
-            }
-
             .header h1 {
-                font-size: clamp(1.8rem, 8vw, 2.5rem);
-                line-height: 1.2;
-            }
-            
-            .header p {
-                font-size: 0.9rem;
-            }
-            
-            .last-updated {
-                padding: var(--space-xs) var(--space-sm);
-                font-size: 0.8rem;
+                font-size: 1.75rem;
             }
 
             .stats-grid {
                 grid-template-columns: 1fr;
-                gap: var(--space-sm);
             }
-            
+
             .stat-card {
-                padding: var(--space-md);
-            }
-            
-            .stat-icon {
-                width: 70px;
-                height: 70px;
-                font-size: 1.8rem;
-                margin-bottom: var(--space-sm);
+                padding: var(--space-4);
             }
 
-            .org-card {
-                padding: var(--space-md);
+            .panel-content {
+                padding: var(--space-4);
             }
-            
-            .org-header {
-                flex-direction: column;
-                align-items: flex-start;
-                gap: var(--space-sm);
-                margin-bottom: var(--space-sm);
-            }
-            
-            .org-header h3 {
-                font-size: 1.2rem;
-            }
-            
-            .status {
-                align-self: flex-start;
-                padding: var(--space-xs) var(--space-sm);
-                font-size: 0.8rem;
-            }
-            
-            .org-details p {
-                font-size: 0.9rem;
-                margin: var(--space-xs) 0;
-            }
+        }
 
-            .performance-metrics {
-                grid-template-columns: 1fr;
-                gap: var(--space-sm);
-            }
-            
-            .panel-header {
-                flex-direction: column;
-                align-items: flex-start;
-                gap: var(--space-sm);
-                margin-bottom: var(--space-md);
-            }
-            
-            .panel-title {
-                font-size: 1.2rem;
+        /* Print Styles */
+        @media print {
+            body {
+                background: white;
             }
             
             .refresh-btn {
-                padding: var(--space-xs) var(--space-sm);
-                font-size: 0.9rem;
-                align-self: flex-start;
+                display: none;
             }
-            
-            .activity-item {
-                flex-direction: column;
-                align-items: flex-start;
-                gap: var(--space-sm);
-                padding: var(--space-sm) 0;
-            }
-            
-            .activity-icon {
-                width: 40px;
-                height: 40px;
-                align-self: flex-start;
-            }
-            
-            .chart-container {
-                height: 250px; /* Smaller chart on mobile */
-            }
-        }
-        
-        /* Touch-friendly improvements for mobile */
-        @media (max-width: 768px) {
-            .refresh-btn, .status, .last-updated {
-                min-height: 44px; /* Touch-friendly minimum size */
-                display: flex;
-                align-items: center;
-                justify-content: center;
-            }
-            
-            .org-card, .stat-card, .activity-item {
-                transition: transform 0.2s ease; /* Faster transitions on mobile */
-            }
-            
-            /* Improve text readability on mobile */
-            .org-details p, .activity-title, .activity-time {
-                line-height: 1.4;
-            }
-        }
-        
-        /* Landscape phone orientation */
-        @media (max-width: 768px) and (orientation: landscape) {
-            .stats-grid {
-                grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-            }
-            
-            .header h1 {
-                font-size: clamp(1.5rem, 5vw, 2.5rem);
-            }
-            
-            .performance-metrics {
-                grid-template-columns: repeat(2, 1fr);
-            }
-        }
-
-        /* Custom scrollbar */
-        ::-webkit-scrollbar {
-            width: 8px;
-        }
-
-        ::-webkit-scrollbar-track {
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 4px;
-        }
-
-        ::-webkit-scrollbar-thumb {
-            background: rgba(255, 255, 255, 0.3);
-            border-radius: 4px;
-        }
-
-        ::-webkit-scrollbar-thumb:hover {
-            background: rgba(255, 255, 255, 0.5);
-        }
-        
-        /* Responsive Design */
-        @media (max-width: 1200px) {
-            .container {
-                padding: var(--space-lg) var(--space-md);
-            }
-            
-            .stats-grid {
-                grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-                gap: var(--space-md);
-            }
-            
-            .main-content {
-                grid-template-columns: 1fr;
-                gap: var(--space-lg);
-            }
-        }
-        
-        @media (max-width: 768px) {
-            .container {
-                padding: var(--space-md) var(--space-sm);
-            }
-            
-            .header {
-                padding: var(--space-lg) 0;
-            }
-            
-            .stats-grid {
-                grid-template-columns: 1fr;
-                gap: var(--space-md);
-            }
-            
-            .stat-card {
-                padding: var(--space-lg);
-            }
-            
-            .stat-icon {
-                width: 80px;
-                height: 80px;
-                font-size: 2rem;
-            }
-            
-            .org-card {
-                padding: var(--space-lg);
-            }
-        }
-        
-        @media (max-width: 480px) {
-            .header h1 {
-                font-size: clamp(2rem, 8vw, 3rem);
-            }
-            
-            .stat-number {
-                font-size: clamp(2rem, 8vw, 2.5rem);
-            }
-            
-            .stat-card {
-                padding: var(--space-md);
-            }
-            
-            .org-card {
-                padding: var(--space-md);
-            }
-        }
-        
-        /* Enhanced Loading States */
-        .loading {
-            opacity: 0.7;
-            pointer-events: none;
-            position: relative;
-        }
-        
-        .loading::after {
-            content: '';
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            width: 40px;
-            height: 40px;
-            border: 3px solid transparent;
-            border-top: 3px solid var(--text-accent);
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            transform: translate(-50%, -50%);
-            z-index: 1000;
-        }
-        
-        @keyframes spin {
-            0% { transform: translate(-50%, -50%) rotate(0deg); }
-            100% { transform: translate(-50%, -50%) rotate(360deg); }
-        }
-        
-        /* Performance optimizations */
-        * {
-            will-change: auto;
-        }
-        
-        .stat-card:hover,
-        .org-card:hover {
-            will-change: transform, box-shadow;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <!-- Header -->
+        <!-- Modern Header -->
         <header class="header">
-            <h1><i class="fas fa-satellite-dish"></i> ETL Dashboard</h1>
-            <p>Real-time monitoring of UN organization job data processing</p>
-            <div class="last-updated">
-                <div class="pulse"></div>
-                <span>Last updated: <span id="lastUpdated">Loading...</span></span>
+            <div class="header-content">
+                <h1>ETL Dashboard</h1>
+                <p class="header-subtitle">Real-time monitoring of UN organization job data processing</p>
+                <div class="status-indicator">
+                    <div class="status-dot"></div>
+                    <span>Last updated: <span id="lastUpdated">Loading...</span></span>
+                </div>
             </div>
         </header>
 
         <!-- Statistics Grid -->
         <div class="stats-grid">
             <div class="stat-card">
-                <div class="stat-icon">
-                    <i class="fas fa-building"></i>
+                <div class="stat-header">
+                    <div class="stat-icon">
+                        <i class="fas fa-building"></i>
+                    </div>
+                    <div class="stat-change">+0%</div>
                 </div>
-                <div class="stat-number" id="totalOrgs">0</div>
+                <div class="stat-value" id="totalOrgs">0</div>
                 <div class="stat-label">Total Organizations</div>
             </div>
             <div class="stat-card">
-                <div class="stat-icon">
-                    <i class="fas fa-check-circle"></i>
+                <div class="stat-header">
+                    <div class="stat-icon">
+                        <i class="fas fa-check-circle"></i>
+                    </div>
+                    <div class="stat-change">+0%</div>
                 </div>
-                <div class="stat-number" id="successfulOrgs">0</div>
+                <div class="stat-value" id="successfulOrgs">0</div>
                 <div class="stat-label">Successful ETL</div>
             </div>
             <div class="stat-card">
-                <div class="stat-icon">
-                    <i class="fas fa-clock"></i>
+                <div class="stat-header">
+                    <div class="stat-icon">
+                        <i class="fas fa-clock"></i>
+                    </div>
+                    <div class="stat-change">+0%</div>
                 </div>
-                <div class="stat-number" id="runningOrgs">0</div>
+                <div class="stat-value" id="runningOrgs">0</div>
                 <div class="stat-label">Currently Running</div>
             </div>
             <div class="stat-card">
-                <div class="stat-icon">
-                    <i class="fas fa-briefcase"></i>
+                <div class="stat-header">
+                    <div class="stat-icon">
+                        <i class="fas fa-briefcase"></i>
+                    </div>
+                    <div class="stat-change">+0%</div>
                 </div>
-                <div class="stat-number" id="totalJobs">0</div>
+                <div class="stat-value" id="totalJobs">0</div>
                 <div class="stat-label">Total Jobs Processed</div>
             </div>
         </div>
 
-        <!-- Main Content -->
-        <div class="main-content">
+        <!-- Main Layout -->
+        <div class="main-layout">
             <!-- Organizations Panel -->
-            <div class="organizations-panel">
+            <div class="panel">
                 <div class="panel-header">
                     <h2 class="panel-title">
-                        <i class="fas fa-list-alt"></i>
+                        <i class="fas fa-list"></i>
                         Organization Status
                     </h2>
                     <button class="refresh-btn" onclick="loadDashboard()">
@@ -1253,16 +718,18 @@
                         Refresh
                     </button>
                 </div>
-                <div id="organizationsContainer">
-                    <div style="text-align: center; padding: 2rem;">
-                        <div class="loading-spinner"></div>
-                        <p style="margin-top: 1rem; color: var(--text-secondary);">Loading organization data...</p>
+                <div class="panel-content">
+                    <div id="organizationsContainer" class="org-list">
+                        <div class="loading-state">
+                            <div class="loading-spinner"></div>
+                            <p>Loading organization data...</p>
+                        </div>
                     </div>
                 </div>
             </div>
 
             <!-- Charts Panel -->
-            <div class="charts-panel">
+            <div class="panel chart-panel">
                 <div class="panel-header">
                     <h2 class="panel-title">
                         <i class="fas fa-chart-pie"></i>
@@ -1272,7 +739,7 @@
                 <div class="chart-container">
                     <canvas id="statusChart"></canvas>
                 </div>
-                <div class="performance-metrics">
+                <div class="metrics-grid">
                     <div class="metric-item">
                         <div class="metric-value" id="avgDuration">0s</div>
                         <div class="metric-label">Avg Duration</div>
@@ -1294,17 +761,19 @@
         </div>
 
         <!-- Recent Activity -->
-        <div class="recent-activity">
+        <div class="panel">
             <div class="panel-header">
                 <h2 class="panel-title">
                     <i class="fas fa-history"></i>
                     Recent Activity
                 </h2>
             </div>
-            <div id="recentActivityContainer">
-                <div style="text-align: center; padding: 2rem;">
-                    <div class="loading-spinner"></div>
-                    <p style="margin-top: 1rem; color: var(--text-secondary);">Loading recent activity...</p>
+            <div class="panel-content">
+                <div id="recentActivityContainer" class="activity-list">
+                    <div class="loading-state">
+                        <div class="loading-spinner"></div>
+                        <p>Loading recent activity...</p>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1540,28 +1009,33 @@
                     const statusText = org.status.charAt(0).toUpperCase() + org.status.slice(1);
                     const statusIcon = getStatusIcon(org.status);
                     
-                    // Show error message if failed
-                    const errorInfo = org.status === 'failed' && org.errorMessage ? 
-                        `<p><strong>Error:</strong> <span style="color: #ff6b6b; font-size: 0.9rem;">${org.errorMessage}</span></p>` : '';
-                    
-                    // Show processing stats if available
-                    const processStats = org.processedCount > 0 ? 
-                        `<p><strong>Records:</strong> ${org.processedCount} processed, ${org.successCount} success, ${org.errorCount} errors</p>` : '';
-                    
                     orgCard.innerHTML = `
                         <div class="org-header">
-                            <h3>${org.name}</h3>
-                            <span class="status status-${org.status}">
+                            <h3 class="org-name">${org.name}</h3>
+                            <div class="org-status ${org.status}">
                                 <i class="fas fa-${statusIcon}"></i>
                                 ${statusText}
-                            </span>
+                            </div>
                         </div>
                         <div class="org-details">
-                            <p><strong>Last Run:</strong> ${org.lastRun}</p>
-                            <p><strong>Jobs in DB:</strong> ${org.jobsProcessed.toLocaleString()}</p>
-                            <p><strong>Duration:</strong> ${durationText}</p>
-                            ${processStats}
-                            ${errorInfo}
+                            <div class="org-metric">
+                                <div class="org-metric-label">Last Run</div>
+                                <div class="org-metric-value">${org.lastRun}</div>
+                            </div>
+                            <div class="org-metric">
+                                <div class="org-metric-label">Jobs</div>
+                                <div class="org-metric-value">${org.jobsProcessed.toLocaleString()}</div>
+                            </div>
+                            <div class="org-metric">
+                                <div class="org-metric-label">Duration</div>
+                                <div class="org-metric-value">${durationText}</div>
+                            </div>
+                            ${org.processedCount > 0 ? `
+                            <div class="org-metric">
+                                <div class="org-metric-label">Success Rate</div>
+                                <div class="org-metric-value">${Math.round((org.successCount / org.processedCount) * 100)}%</div>
+                            </div>
+                            ` : ''}
                         </div>
                     `;
                     orgContainer.appendChild(orgCard);
@@ -1584,33 +1058,37 @@
                         const timeB = new Date(b.startTime || b.endTime || 0);
                         return timeB - timeA;
                     })
-                    .slice(0, 6);
+                    .slice(0, 8);
                 
                 if (recentActivities.length > 0) {
                     recentActivityContainer.innerHTML = recentActivities.map(org => {
-                        const actionText = org.status === 'running' ? 'ETL Started' : 
-                                         org.status === 'success' ? 'ETL Completed' : 
-                                         org.status === 'failed' ? 'ETL Failed' : 'ETL Status Update';
+                        const actionText = org.status === 'running' ? 'ETL Process Started' : 
+                                         org.status === 'success' ? 'ETL Process Completed' : 
+                                         org.status === 'failed' ? 'ETL Process Failed' : 'Status Updated';
                         
-                        const iconGradient = getStatusGradient(org.status);
+                        const iconBg = org.status === 'success' ? 'var(--success)' :
+                                      org.status === 'running' ? 'var(--warning)' :
+                                      org.status === 'failed' ? 'var(--error)' : 'var(--text-secondary)';
+                        
                         const statusIcon = getStatusIcon(org.status);
                         
                         return `
                             <div class="activity-item">
-                                <div class="activity-icon" style="background: ${iconGradient};">
+                                <div class="activity-icon" style="background: ${iconBg};">
                                     <i class="fas fa-${statusIcon}"></i>
                                 </div>
                                 <div class="activity-content">
-                                    <div class="activity-title">${org.name} - ${actionText}</div>
-                                    <div class="activity-time">${org.lastRun}${org.duration ? ` • ${formatDuration(org.duration)}` : ''}</div>
+                                    <div class="activity-title">${org.name}</div>
+                                    <div class="activity-subtitle">${actionText}</div>
                                 </div>
+                                <div class="activity-time">${org.lastRun}</div>
                             </div>
                         `;
                     }).join('');
                 } else {
                     recentActivityContainer.innerHTML = `
-                        <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">
-                            <i class="fas fa-info-circle" style="font-size: 2rem; margin-bottom: 1rem; opacity: 0.5;"></i>
+                        <div class="loading-state">
+                            <i class="fas fa-info-circle" style="font-size: 2rem; color: var(--text-tertiary); margin-bottom: var(--space-3);"></i>
                             <p>No recent ETL activity found</p>
                         </div>
                     `;
@@ -1618,18 +1096,6 @@
                 console.log(`✅ Updated recent activity with ${recentActivities.length} items`);
             } else {
                 console.warn('⚠️ recentActivityContainer not found or no organization data');
-            }
-            
-            // Update system health if available
-            if (data.systemHealth) {
-                const healthStatus = document.getElementById('system-health');
-                if (healthStatus) {
-                    console.log('💚 Updating system health status...');
-                    healthStatus.textContent = data.systemHealth.status;
-                    healthStatus.className = `status status-${data.systemHealth.status}`;
-                } else {
-                    console.warn('⚠️ system-health element not found');
-                }
             }
             
             // Update chart if function exists
@@ -1658,129 +1124,51 @@
                     avgDuration: 0,
                     successRate: 0
                 },
-                organizations: [
-                    { name: 'System', status: 'error', lastRun: 'Unable to connect', jobsProcessed: 0, duration: null }
-                ]
+                organizations: []
             };
             
             updateDashboardDisplay(errorData);
         }
 
-        // Update dashboard with mock data (kept for reference)
-        function updateDashboardWithMockData() {
-            const mockData = {
-                statistics: {
-                    totalOrganizations: 12,
-                    successfulOrgs: 10,
-                    runningOrgs: 1,
-                    failedOrgs: 1,
-                    totalJobs: 2847,
-                    avgDuration: 142,
-                    successRate: 83.3
-                },
-                organizations: [
-                    { name: 'UNHCR', status: 'success', lastRun: '2 hours ago', jobsProcessed: 156, duration: 145 },
-                    { name: 'WFP', status: 'success', lastRun: '2 hours ago', jobsProcessed: 234, duration: 189 },
-                    { name: 'UNICEF', status: 'success', lastRun: '2 hours ago', jobsProcessed: 298, duration: 203 },
-                    { name: 'UNDP', status: 'running', lastRun: 'Running now', jobsProcessed: 189, duration: null },
-                    { name: 'WHO', status: 'success', lastRun: '3 hours ago', jobsProcessed: 167, duration: 156 },
-                    { name: 'UNESCO', status: 'success', lastRun: '3 hours ago', jobsProcessed: 145, duration: 134 },
-                    { name: 'UNEP', status: 'failed', lastRun: '4 hours ago', jobsProcessed: 0, duration: null },
-                    { name: 'ILO', status: 'success', lastRun: '4 hours ago', jobsProcessed: 201, duration: 178 },
-                    { name: 'FAO', status: 'success', lastRun: '4 hours ago', jobsProcessed: 187, duration: 165 },
-                    { name: 'UNFPA', status: 'success', lastRun: '5 hours ago', jobsProcessed: 123, duration: 142 },
-                    { name: 'UN Women', status: 'success', lastRun: '5 hours ago', jobsProcessed: 98, duration: 98 },
-                    { name: 'OHCHR', status: 'success', lastRun: '5 hours ago', jobsProcessed: 67, duration: 87 }
-                ],
-                recentActivity: [
-                    { org: 'UNDP', action: 'ETL Started', time: '2 minutes ago', status: 'running' },
-                    { org: 'UNICEF', action: 'ETL Completed', time: '2 hours ago', status: 'success' },
-                    { org: 'WFP', action: 'ETL Completed', time: '2 hours ago', status: 'success' },
-                    { org: 'UNHCR', action: 'ETL Completed', time: '2 hours ago', status: 'success' },
-                    { org: 'UNEP', action: 'ETL Failed', time: '4 hours ago', status: 'failed' },
-                    { org: 'WHO', action: 'ETL Completed', time: '3 hours ago', status: 'success' }
-                ]
-            };
-
-            updateStatistics(mockData.statistics);
-            updateOrganizations(mockData.organizations);
-            updateRecentActivity(mockData.recentActivity);
-            updateChart(mockData.statistics);
-        }
-
-        // Update statistics cards
-        function updateStatistics(stats) {
-            document.getElementById('totalOrgs').textContent = stats.totalOrganizations;
-            document.getElementById('successfulOrgs').textContent = stats.successfulOrgs;
-            document.getElementById('runningOrgs').textContent = stats.runningOrgs;
-            document.getElementById('totalJobs').textContent = stats.totalJobs.toLocaleString();
-            document.getElementById('avgDuration').textContent = stats.avgDuration + 's';
-            document.getElementById('successRate').textContent = stats.successRate + '%';
-            document.getElementById('lastRun').textContent = '2 hours ago';
-            document.getElementById('nextRun').textContent = '4 hours';
-        }
-
-        // Update organizations list
-        function updateOrganizations(organizations) {
-            const container = document.getElementById('organizationsContainer');
-            container.innerHTML = organizations.map(org => `
-                <div class="organization-item">
-                    <div class="org-info">
-                        <div class="org-avatar">${org.name.substring(0, 2)}</div>
-                        <div class="org-details">
-                            <h4>${org.name}</h4>
-                            <p>${org.jobsProcessed} jobs • ${org.lastRun}</p>
-                        </div>
-                    </div>
-                    <div class="status-badge status-${org.status}">
-                        <i class="fas fa-${getStatusIcon(org.status)}"></i>
-                        ${org.status.charAt(0).toUpperCase() + org.status.slice(1)}
-                    </div>
-                </div>
-            `).join('');
-        }
-
-        // Update recent activity
-        function updateRecentActivity(activities) {
-            const container = document.getElementById('recentActivityContainer');
-            container.innerHTML = activities.map(activity => `
-                <div class="activity-item">
-                    <div class="activity-icon" style="background: ${getStatusGradient(activity.status)};">
-                        <i class="fas fa-${getStatusIcon(activity.status)}"></i>
-                    </div>
-                    <div class="activity-content">
-                        <div class="activity-title">${activity.org} - ${activity.action}</div>
-                        <div class="activity-time">${activity.time}</div>
-                    </div>
-                </div>
-            `).join('');
-        }
-
         // Update chart
         function updateChart(stats) {
-            const ctx = document.getElementById('statusChart').getContext('2d');
+            const ctx = document.getElementById('statusChart');
+            if (!ctx) {
+                console.warn('⚠️ statusChart canvas not found');
+                return;
+            }
+            
+            const context = ctx.getContext('2d');
             
             if (statusChart) {
                 statusChart.destroy();
             }
 
-            statusChart = new Chart(ctx, {
+            statusChart = new Chart(context, {
                 type: 'doughnut',
                 data: {
-                    labels: ['Successful', 'Running', 'Failed'],
+                    labels: ['Successful', 'Running', 'Failed', 'Idle'],
                     datasets: [{
-                        data: [stats.successfulOrgs, stats.runningOrgs, stats.failedOrgs],
+                        data: [
+                            stats.successfulOrgs || 0, 
+                            stats.runningOrgs || 0, 
+                            stats.failedOrgs || 0,
+                            stats.idleOrgs || 0
+                        ],
                         backgroundColor: [
-                            'rgba(79, 172, 254, 0.8)',
-                            'rgba(67, 233, 123, 0.8)',
-                            'rgba(250, 112, 154, 0.8)'
+                            '#10b981',
+                            '#f59e0b',
+                            '#ef4444',
+                            '#6b7280'
                         ],
                         borderColor: [
-                            'rgba(79, 172, 254, 1)',
-                            'rgba(67, 233, 123, 1)',
-                            'rgba(250, 112, 154, 1)'
+                            '#10b981',
+                            '#f59e0b',
+                            '#ef4444',
+                            '#6b7280'
                         ],
-                        borderWidth: 2
+                        borderWidth: 0,
+                        hoverBorderWidth: 0
                     }]
                 },
                 options: {
@@ -1790,20 +1178,19 @@
                         legend: {
                             position: 'bottom',
                             labels: {
-                                color: 'rgba(255, 255, 255, 0.8)',
+                                color: '#6b7280',
                                 font: {
                                     family: 'Inter',
-                                    size: 12
+                                    size: 12,
+                                    weight: '500'
                                 },
-                                padding: 20
+                                padding: 20,
+                                usePointStyle: true,
+                                pointStyle: 'circle'
                             }
                         }
                     },
-                    elements: {
-                        arc: {
-                            borderWidth: 2
-                        }
-                    }
+                    cutout: '65%'
                 }
             });
         }
@@ -1820,15 +1207,6 @@
             }
         }
 
-        function getStatusGradient(status) {
-            switch (status) {
-                case 'success': return 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)';
-                case 'failed': return 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)';
-                case 'running': return 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)';
-                default: return 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
-            }
-        }
-
         function updateLastUpdated() {
             document.getElementById('lastUpdated').textContent = new Date().toLocaleTimeString();
         }
@@ -1837,9 +1215,14 @@
             const containers = ['organizationsContainer', 'recentActivityContainer'];
             containers.forEach(containerId => {
                 const container = document.getElementById(containerId);
-                container.innerHTML = `<div class="error-message">
-                    <i class="fas fa-exclamation-triangle"></i> ${message}
-                </div>`;
+                if (container) {
+                    container.innerHTML = `
+                        <div class="error-state">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <p>${message}</p>
+                        </div>
+                    `;
+                }
             });
         }
         
@@ -1877,71 +1260,6 @@
                 const minutes = Math.floor((seconds % 3600) / 60);
                 return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
             }
-        }
-        
-        // Update chart function
-        function updateChart(statistics) {
-            const ctx = document.getElementById('statusChart');
-            if (!ctx) {
-                console.warn('⚠️ statusChart canvas not found');
-                return;
-            }
-            
-            const context = ctx.getContext('2d');
-            
-            if (statusChart) {
-                statusChart.destroy();
-            }
-
-            statusChart = new Chart(context, {
-                type: 'doughnut',
-                data: {
-                    labels: ['Successful', 'Running', 'Failed', 'Idle'],
-                    datasets: [{
-                        data: [
-                            statistics.successfulOrgs || 0, 
-                            statistics.runningOrgs || 0, 
-                            statistics.failedOrgs || 0,
-                            statistics.idleOrgs || 0
-                        ],
-                        backgroundColor: [
-                            'rgba(56, 239, 125, 0.8)',
-                            'rgba(252, 227, 138, 0.8)',
-                            'rgba(252, 70, 107, 0.8)',
-                            'rgba(9, 198, 249, 0.8)'
-                        ],
-                        borderColor: [
-                            'rgba(56, 239, 125, 1)',
-                            'rgba(252, 227, 138, 1)',
-                            'rgba(252, 70, 107, 1)',
-                            'rgba(9, 198, 249, 1)'
-                        ],
-                        borderWidth: 2
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            position: 'bottom',
-                            labels: {
-                                color: 'rgba(255, 255, 255, 0.8)',
-                                font: {
-                                    family: 'Inter',
-                                    size: 12
-                                },
-                                padding: 20
-                            }
-                        }
-                    },
-                    elements: {
-                        arc: {
-                            borderWidth: 2
-                        }
-                    }
-                }
-            });
         }
 
         // Cleanup on page unload
