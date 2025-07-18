@@ -78,8 +78,11 @@ const getRandomImage = () => {
   
   // Check if directory exists
   if (!fs.existsSync(imagesDir)) {
-    console.error(`❌ Images directory not found: ${imagesDir}`);
-    throw new Error('LinkedIn post images directory not found. Please create src/etl/post_images/ and add images.');
+    console.warn(`⚠️ Images directory not found: ${imagesDir}`);
+    console.log(`🔄 Creating fallback image solution for deployment...`);
+    
+    // Return null to indicate no image should be used
+    return null;
   }
   
   // Get all image files
@@ -88,8 +91,11 @@ const getRandomImage = () => {
   );
   
   if (images.length === 0) {
-    console.error('❌ No image files found in post_images directory');
-    throw new Error('No images found in post_images directory. Please add .jpg, .jpeg, .png, or .gif files.');
+    console.warn('⚠️ No image files found in post_images directory');
+    console.log('🔄 Proceeding without image for deployment compatibility...');
+    
+    // Return null to indicate no image should be used
+    return null;
   }
   
   const randomImage = images[Math.floor(Math.random() * images.length)];
@@ -170,9 +176,22 @@ module.exports.postJobNetworkPostsToLinkedIn = async (jobNetwork) => {
     });
     message += "#UnitedNations #jobs #unjobs #careers #hiring #jobsearch #unjobzone #UN";
 
-    // Get a random image from the directory
+    // Get a random image from the directory (or null if not available)
     const imagePath = getRandomImage();
-    const asset = await uploadImageToLinkedIn(imagePath);
+    let asset = null;
+    
+    // Only try to upload image if one is available
+    if (imagePath) {
+      try {
+        asset = await uploadImageToLinkedIn(imagePath);
+        console.log('✅ Image uploaded successfully for LinkedIn post');
+      } catch (imageError) {
+        console.warn('⚠️ Failed to upload image, proceeding with text-only post:', imageError.message);
+        asset = null;
+      }
+    } else {
+      console.log('📝 No image available, creating text-only LinkedIn post');
+    }
 
     // Validate and format organization ID
     const organizationId = process.env.LINKEDIN_ORGANIZATION_ID?.toString().trim();
@@ -190,6 +209,8 @@ module.exports.postJobNetworkPostsToLinkedIn = async (jobNetwork) => {
     const authorUrn = `urn:li:company:${organizationId}`;
 
     const url = "https://api.linkedin.com/v2/ugcPosts";
+    
+    // Create different payload based on whether we have an image or not
     const payload = {
       author: authorUrn,
       lifecycleState: "PUBLISHED",
@@ -198,19 +219,23 @@ module.exports.postJobNetworkPostsToLinkedIn = async (jobNetwork) => {
           shareCommentary: {
             text: message
           },
-          shareMediaCategory: "IMAGE",
-          media: [
-            {
-              status: "READY",
-              description: {
-                text: "Check out these amazing job opportunities!"
-              },
-              media: asset,
-              title: {
-                text: "Job Opportunities"
+          ...(asset ? {
+            shareMediaCategory: "IMAGE",
+            media: [
+              {
+                status: "READY",
+                description: {
+                  text: "Check out these amazing job opportunities!"
+                },
+                media: asset,
+                title: {
+                  text: "Job Opportunities"
+                }
               }
-            }
-          ]
+            ]
+          } : {
+            shareMediaCategory: "NONE"
+          })
         }
       },
       visibility: {
@@ -319,9 +344,22 @@ module.exports.postExpiringSoonJobPostsToLinkedIn = async () => {
     message += "Don't miss out on these incredible opportunities! 🚀\n\n";
     message += "#UnitedNations #jobs #unjobs #careers #hiring #jobsearch #unjobzone #UN";
 
-    // Get a random image from the directory
+    // Get a random image from the directory (or null if not available)
     const imagePath = getRandomImage();
-    const asset = await uploadImageToLinkedIn(imagePath);
+    let asset = null;
+    
+    // Only try to upload image if one is available
+    if (imagePath) {
+      try {
+        asset = await uploadImageToLinkedIn(imagePath);
+        console.log('✅ Image uploaded successfully for LinkedIn post');
+      } catch (imageError) {
+        console.warn('⚠️ Failed to upload image, proceeding with text-only post:', imageError.message);
+        asset = null;
+      }
+    } else {
+      console.log('📝 No image available, creating text-only LinkedIn post');
+    }
 
     // Validate and format organization ID
     const organizationId = process.env.LINKEDIN_ORGANIZATION_ID?.toString().trim();
@@ -339,6 +377,8 @@ module.exports.postExpiringSoonJobPostsToLinkedIn = async () => {
     const authorUrn = `urn:li:company:${organizationId}`;
 
     const url = "https://api.linkedin.com/v2/ugcPosts";
+    
+    // Create different payload based on whether we have an image or not
     const payload = {
       author: authorUrn,
       lifecycleState: "PUBLISHED",
@@ -347,19 +387,23 @@ module.exports.postExpiringSoonJobPostsToLinkedIn = async () => {
           shareCommentary: {
             text: message
           },
-          shareMediaCategory: "IMAGE",
-          media: [
-            {
-              status: "READY",
-              description: {
-                text: "Check out these amazing job opportunities!"
-              },
-              media: asset,
-              title: {
-                text: "Job Opportunities"
+          ...(asset ? {
+            shareMediaCategory: "IMAGE",
+            media: [
+              {
+                status: "READY",
+                description: {
+                  text: "Check out these amazing job opportunities!"
+                },
+                media: asset,
+                title: {
+                  text: "Job Opportunities"
+                }
               }
-            }
-          ]
+            ]
+          } : {
+            shareMediaCategory: "NONE"
+          })
         }
       },
       visibility: {

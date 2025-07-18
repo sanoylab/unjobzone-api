@@ -12,7 +12,8 @@ const {
   clearCache,
   fixDatabaseSchema,
   testLinkedInETL,
-  triggerLinkedInPost
+  triggerLinkedInPost,
+  diagnoseLinkedInDeployment
 } = require("../controllers/etlController");
 
 // Apply rate limiting to all ETL routes
@@ -553,5 +554,47 @@ router.post("/test-linkedin", auth, testLinkedInETL);
  *         description: LinkedIn posting failed
  */
 router.post("/trigger-linkedin-post", auth, triggerLinkedInPost);
+
+/**
+ * @swagger
+ * /api/v1/etl/diagnose-linkedin-deployment:
+ *   get:
+ *     summary: Diagnose LinkedIn posting issues in deployment environment
+ *     tags: [ETL Monitoring]
+ *     responses:
+ *       200:
+ *         description: LinkedIn deployment diagnostics completed
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/APIResponse'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       type: object
+ *                       properties:
+ *                         timestamp:
+ *                           type: string
+ *                         environment:
+ *                           type: string
+ *                         timezone:
+ *                           type: object
+ *                         credentials:
+ *                           type: object
+ *                         fileSystem:
+ *                           type: object
+ *                         database:
+ *                           type: object
+ *                         network:
+ *                           type: object
+ *                         system:
+ *                           type: object
+ *                         overall:
+ *                           type: object
+ *       500:
+ *         description: Diagnostics failed
+ */
+router.get("/diagnose-linkedin-deployment", diagnoseLinkedInDeployment);
 
 module.exports = router; 

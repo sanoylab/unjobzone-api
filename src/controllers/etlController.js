@@ -602,5 +602,191 @@ const triggerLinkedInPost = async (req, res) => {
   }
 };
 
+// Comprehensive LinkedIn Deployment Diagnostics
+const diagnoseLinkedInDeployment = async (req, res) => {
+  try {
+    console.log('🔍 Running LinkedIn deployment diagnostics...');
+    
+    const diagnostics = {
+      timestamp: new Date().toISOString(),
+      environment: process.env.NODE_ENV || 'development',
+      timezone: {
+        current: new Date().toString(),
+        utc: new Date().toUTCString(),
+        offset: new Date().getTimezoneOffset()
+      },
+      credentials: {},
+      fileSystem: {},
+      database: {},
+      network: {},
+      errors: []
+    };
+
+    // 1. Check Environment Variables
+    console.log('1️⃣ Checking LinkedIn credentials...');
+    const requiredEnvVars = [
+      'LINKEDIN_CLIENT_ID',
+      'LINKEDIN_CLIENT_SECRET', 
+      'LINKEDIN_ACCESS_TOKEN',
+      'LINKEDIN_ORGANIZATION_ID'
+    ];
+
+    requiredEnvVars.forEach(varName => {
+      const value = process.env[varName];
+      diagnostics.credentials[varName] = {
+        exists: !!value,
+        length: value ? value.length : 0,
+        preview: value ? `${value.substring(0, 10)}...` : 'NOT_SET'
+      };
+    });
+
+    // 2. Check File System (post_images directory)
+    console.log('2️⃣ Checking file system...');
+    const path = require('path');
+    const fs = require('fs');
+    
+    try {
+      const imagesDir = path.join(__dirname, "../etl/post_images");
+      diagnostics.fileSystem.imagesDirectory = {
+        path: imagesDir,
+        exists: fs.existsSync(imagesDir),
+        files: []
+      };
+      
+      if (fs.existsSync(imagesDir)) {
+        const files = fs.readdirSync(imagesDir).filter(file => 
+          /\.(jpg|jpeg|png|gif)$/i.test(file)
+        );
+        diagnostics.fileSystem.imagesDirectory.files = files;
+        diagnostics.fileSystem.imagesDirectory.count = files.length;
+      }
+    } catch (fsError) {
+      diagnostics.errors.push(`File system error: ${fsError.message}`);
+      diagnostics.fileSystem.error = fsError.message;
+    }
+
+    // 3. Check Database Connection and Job Data
+    console.log('3️⃣ Checking database...');
+    try {
+      const { Pool } = require('pg');
+      const { credentials } = require('../util/db');
+      const pool = new Pool(credentials);
+      
+      // Test basic connection
+      const result = await pool.query('SELECT COUNT(*) as count FROM job_vacancies LIMIT 1');
+      diagnostics.database.totalJobs = parseInt(result.rows[0].count);
+      
+      // Check for expiring jobs
+      const expiringQuery = `
+        SELECT COUNT(*) as count 
+        FROM job_vacancies 
+        WHERE DATE(end_date) = CURRENT_DATE OR DATE(end_date) = CURRENT_DATE + INTERVAL '1 day'
+      `;
+      const expiringResult = await pool.query(expiringQuery);
+      diagnostics.database.expiringJobs = parseInt(expiringResult.rows[0].count);
+      
+      // Check for IT jobs
+      const itQuery = `
+        SELECT COUNT(*) as count 
+        FROM job_vacancies 
+        WHERE jn = $1
+      `;
+      const itResult = await pool.query(itQuery, ['Information and Telecommunication Technology']);
+      diagnostics.database.itJobs = parseInt(itResult.rows[0].count);
+      
+      diagnostics.database.connected = true;
+      
+    } catch (dbError) {
+      diagnostics.errors.push(`Database error: ${dbError.message}`);
+      diagnostics.database.error = dbError.message;
+    }
+
+    // 4. Test LinkedIn API connectivity
+    console.log('4️⃣ Testing LinkedIn API connectivity...');
+    try {
+      if (process.env.LINKEDIN_ACCESS_TOKEN) {
+        // Test a simple API call to LinkedIn
+        const testResponse = await fetch('https://api.linkedin.com/v2/me', {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${process.env.LINKEDIN_ACCESS_TOKEN}`,
+            'X-Restli-Protocol-Version': '2.0.0'
+          }
+        });
+        
+        diagnostics.network.linkedinApiTest = {
+          status: testResponse.status,
+          statusText: testResponse.statusText,
+          accessible: testResponse.ok
+        };
+        
+        if (!testResponse.ok) {
+          const errorData = await testResponse.json();
+          diagnostics.network.linkedinApiTest.error = errorData;
+        }
+      } else {
+        diagnostics.network.linkedinApiTest = { error: 'No access token available' };
+      }
+    } catch (networkError) {
+      diagnostics.errors.push(`Network error: ${networkError.message}`);
+      diagnostics.network.error = networkError.message;
+    }
+
+    // 5. Check memory and resource usage
+    console.log('5️⃣ Checking system resources...');
+    diagnostics.system = {
+      memory: {
+        used: Math.round(process.memoryUsage().rss / 1024 / 1024),
+        heap: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
+        external: Math.round(process.memoryUsage().external / 1024 / 1024)
+      },
+      uptime: Math.round(process.uptime()),
+      platform: process.platform,
+      nodeVersion: process.version
+    };
+
+    // 6. Determine overall health
+    const hasCredentials = requiredEnvVars.every(env => process.env[env]);
+    const hasImages = diagnostics.fileSystem.imagesDirectory?.count > 0;
+    const hasDatabase = diagnostics.database.connected;
+    const hasNetworkAccess = diagnostics.network.linkedinApiTest?.accessible;
+
+    diagnostics.overall = {
+      healthy: hasCredentials && hasImages && hasDatabase && hasNetworkAccess,
+      issues: [],
+      recommendations: []
+    };
+
+    if (!hasCredentials) {
+      diagnostics.overall.issues.push('Missing LinkedIn credentials');
+      diagnostics.overall.recommendations.push('Set all LinkedIn environment variables in render.com dashboard');
+    }
+    
+    if (!hasImages) {
+      diagnostics.overall.issues.push('Missing post images directory or files');
+      diagnostics.overall.recommendations.push('Ensure src/etl/post_images/ directory with images is deployed');
+    }
+    
+    if (!hasDatabase) {
+      diagnostics.overall.issues.push('Database connectivity issues');
+      diagnostics.overall.recommendations.push('Check PostgreSQL connection settings');
+    }
+    
+    if (!hasNetworkAccess) {
+      diagnostics.overall.issues.push('LinkedIn API not accessible');
+      diagnostics.overall.recommendations.push('Check access token validity and network restrictions');
+    }
+
+    console.log('✅ LinkedIn deployment diagnostics completed');
+    
+    sendResponse(res, 200, true, diagnostics, 'LinkedIn deployment diagnostics completed');
+    
+  } catch (error) {
+    console.error('❌ LinkedIn deployment diagnostics failed:', error);
+    sendResponse(res, 500, false, null, 'Diagnostics failed', error.message);
+  }
+};
+
 module.exports.testLinkedInETL = testLinkedInETL;
 module.exports.triggerLinkedInPost = triggerLinkedInPost; 
+module.exports.diagnoseLinkedInDeployment = diagnoseLinkedInDeployment; 
