@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 
 /**
- * Standalone Expired Job Cleanup Script
+ * Database Cleanup Script (Expired Jobs + Duplicates)
  * 
- * This script removes job vacancies where the end_date (application deadline) 
- * has passed the current date.
+ * This script removes:
+ * 1. Job vacancies where the end_date (application deadline) has passed
+ * 2. Duplicate job entries (keeps the most recent one)
  * 
  * Usage:
  *   node src/etl/cleanup-expired-jobs.js           # Run cleanup
@@ -15,11 +16,12 @@
  *   - Dry run mode to preview changes
  *   - Detailed logging and statistics
  *   - Only removes jobs where end_date < NOW()
+ *   - Removes duplicates but keeps the most recent copy
  *   - Preserves all active jobs (end_date >= today)
  */
 
 require('dotenv').config();
-const { cleanupExpiredJobs, getJobsExpiringSoon } = require('./shared');
+const { cleanupExpiredAndDuplicateJobs, getJobsExpiringSoon } = require('./shared');
 
 // Parse command line arguments
 const args = process.argv.slice(2);
@@ -28,10 +30,12 @@ const showHelp = args.includes('--help') || args.includes('-h');
 
 function showHelpMessage() {
   console.log(`
-🧹 Expired Job Cleanup Script
-=============================
+🧹 Database Cleanup Script (Expired Jobs + Duplicates)
+======================================================
 
-This script removes job vacancies where the application deadline (end_date) has passed.
+This script cleans up the database by removing:
+1. Job vacancies where the application deadline (end_date) has passed
+2. Duplicate job entries (keeps the most recent copy)
 
 Usage:
   node src/etl/cleanup-expired-jobs.js [options]
@@ -41,17 +45,18 @@ Options:
   --help, -h       Show this help message
 
 Examples:
-  node src/etl/cleanup-expired-jobs.js              # Remove expired jobs
-  node src/etl/cleanup-expired-jobs.js --dry-run    # Preview expired jobs
+  node src/etl/cleanup-expired-jobs.js              # Clean up database
+  node src/etl/cleanup-expired-jobs.js --dry-run    # Preview cleanup
 
 Safety:
   ✅ Only removes jobs where end_date < current date
+  ✅ Removes duplicates but keeps the most recent copy
   ✅ Never touches active job postings  
   ✅ Includes detailed logging and statistics
   ✅ Logs all activities to ETL monitoring table
 
-The cleanup removes jobs that are past their application deadline, helping maintain
-a clean database with only current opportunities.
+The cleanup ensures database integrity by removing expired jobs and eliminating
+duplicate entries that may have slipped through the ETL process.
 `);
 }
 
@@ -86,18 +91,23 @@ async function main() {
     console.log('\n' + '='.repeat(50));
 
     // Run the cleanup
-    const stats = await cleanupExpiredJobs(null, isDryRun);
+    const stats = await cleanupExpiredAndDuplicateJobs(null, isDryRun);
 
     // Show final summary
     console.log('\n📈 CLEANUP SUMMARY:');
     console.log('==================');
-    console.log(`📊 Total Expired Jobs Found: ${stats.totalExpiredJobs}`);
+    console.log(`📊 Total Issues Found: ${stats.totalExpiredJobs + stats.totalDuplicateJobs}`);
+    console.log(`   📅 Expired Jobs: ${stats.totalExpiredJobs}`);
+    console.log(`   🔄 Duplicate Jobs: ${stats.totalDuplicateJobs}`);
     
     if (isDryRun) {
       console.log('🔍 DRY RUN - No changes made');
-      console.log('💡 Run without --dry-run to actually remove expired jobs');
+      console.log('💡 Run without --dry-run to actually clean up the database');
     } else {
-      console.log(`🗑️  Jobs Deleted: ${stats.deletedJobs}`);
+      const totalDeleted = stats.deletedExpiredJobs + stats.deletedDuplicateJobs;
+      console.log(`🗑️  Total Jobs Deleted: ${totalDeleted}`);
+      console.log(`   📅 Expired: ${stats.deletedExpiredJobs}`);
+      console.log(`   🔄 Duplicates: ${stats.deletedDuplicateJobs}`);
       console.log(`✅ Database cleaned successfully`);
     }
     

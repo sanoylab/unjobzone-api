@@ -188,15 +188,12 @@ const runEtl = async () => {
     }
   }
   
-  // NOTE: Duplicate removal is no longer needed!
-  // The new UPSERT approach prevents duplicates from being inserted in the first place
-  console.log("\n✨ Using UPSERT approach - no duplicate cleanup needed!");
-  
-  // 🧹 Expired Job Cleanup - Run after all organizations complete
-  console.log("\n🧹 Running expired job cleanup...");
+  // 🧹 Database Cleanup - Run after all organizations complete
+  // Clean up both expired jobs AND any duplicates that might have slipped through
+  console.log("\n🧹 Running database cleanup (expired jobs + duplicates)...");
   try {
-    const { cleanupExpiredJobs } = require("./etl/shared");
-    const cleanupStats = await cleanupExpiredJobs();
+    const { cleanupExpiredAndDuplicateJobs } = require("./etl/shared");
+    const cleanupStats = await cleanupExpiredAndDuplicateJobs();
     
     // Add cleanup results to ETL results
     etlResults.expiredCleanup = {

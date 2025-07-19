@@ -524,7 +524,7 @@ const getETLHistory = async (organizationName, limit = 10) => {
  */
 
 // Cleanup expired jobs where end_date < NOW()
-const cleanupExpiredJobs = async (client = null, dryRun = false) => {
+const cleanupExpiredAndDuplicateJobs = async (client = null, dryRun = false) => {
   let ownClient = false;
   
   // Use provided client or create new one
@@ -535,12 +535,14 @@ const cleanupExpiredJobs = async (client = null, dryRun = false) => {
   }
 
   console.log("\n🧹 ==========================================");
-  console.log("📅 Expired Job Cleanup Started");
+  console.log("📅 Expired Jobs & Duplicates Cleanup Started");
   console.log("============================================");
 
   const stats = {
     totalExpiredJobs: 0,
-    deletedJobs: 0,
+    totalDuplicateJobs: 0,
+    deletedExpiredJobs: 0,
+    deletedDuplicateJobs: 0,
     errorCount: 0,
     organizationBreakdown: {},
     startTime: new Date(),
@@ -549,7 +551,41 @@ const cleanupExpiredJobs = async (client = null, dryRun = false) => {
   };
 
   try {
-    // First, get a count and breakdown of expired jobs
+    // Step 1: Check for duplicates
+    console.log("🔍 Step 1: Checking for duplicate jobs...");
+    const duplicateQuery = `
+      SELECT 
+        data_source,
+        COUNT(*) as duplicate_groups,
+        SUM(duplicate_count - 1) as total_duplicates
+      FROM (
+        SELECT 
+          data_source,
+          job_id, 
+          organization_id,
+          COUNT(*) as duplicate_count
+        FROM job_vacancies
+        GROUP BY job_id, data_source, organization_id
+        HAVING COUNT(*) > 1
+      ) duplicates
+      GROUP BY data_source
+      ORDER BY total_duplicates DESC
+    `;
+    
+    const duplicateResult = await client.query(duplicateQuery);
+    stats.totalDuplicateJobs = duplicateResult.rows.reduce((sum, row) => sum + parseInt(row.total_duplicates), 0);
+    
+    if (stats.totalDuplicateJobs > 0) {
+      console.log(`📊 Found ${stats.totalDuplicateJobs} duplicate jobs across ${duplicateResult.rows.length} organizations:`);
+      duplicateResult.rows.forEach(row => {
+        console.log(`   📁 ${row.data_source.toUpperCase()}: ${row.total_duplicates} duplicates in ${row.duplicate_groups} job groups`);
+      });
+    } else {
+      console.log("✅ No duplicate jobs found");
+    }
+
+    // Step 2: Check for expired jobs
+    console.log("\n🔍 Step 2: Checking for expired jobs...");
     const expiredJobsQuery = `
       SELECT 
         data_source,
@@ -565,7 +601,7 @@ const cleanupExpiredJobs = async (client = null, dryRun = false) => {
     const expiredResult = await client.query(expiredJobsQuery);
     stats.organizationBreakdown = expiredResult.rows.reduce((acc, row) => {
       acc[row.data_source] = {
-        count: parseInt(row.expired_count),
+        expiredCount: parseInt(row.expired_count),
         oldestExpired: row.oldest_expired,
         newestExpired: row.newest_expired
       };
@@ -575,41 +611,98 @@ const cleanupExpiredJobs = async (client = null, dryRun = false) => {
     // Calculate total expired jobs
     stats.totalExpiredJobs = expiredResult.rows.reduce((sum, row) => sum + parseInt(row.expired_count), 0);
 
-    console.log(`📊 Found ${stats.totalExpiredJobs} expired jobs across ${expiredResult.rows.length} organizations:`);
+    if (stats.totalExpiredJobs > 0) {
+      console.log(`📊 Found ${stats.totalExpiredJobs} expired jobs across ${expiredResult.rows.length} organizations:`);
+      expiredResult.rows.forEach(row => {
+        console.log(`   📁 ${row.data_source.toUpperCase()}: ${row.expired_count} jobs (oldest: ${row.oldest_expired})`);
+      });
+    } else {
+      console.log("✅ No expired jobs found");
+    }
     
-    if (stats.totalExpiredJobs === 0) {
-      console.log("✅ No expired jobs found - database is clean!");
+    if (stats.totalExpiredJobs === 0 && stats.totalDuplicateJobs === 0) {
+      console.log("\n✅ Database is clean - no expired jobs or duplicates found!");
       stats.endTime = new Date();
       stats.durationSeconds = Math.round((stats.endTime - stats.startTime) / 1000);
       return stats;
     }
-
-    // Show breakdown by organization
-    expiredResult.rows.forEach(row => {
-      console.log(`   📁 ${row.data_source.toUpperCase()}: ${row.expired_count} jobs (oldest: ${row.oldest_expired})`);
-    });
 
     if (dryRun) {
       console.log("\n🔍 DRY RUN MODE - No jobs will be deleted");
+      console.log(`   Would delete: ${stats.totalExpiredJobs} expired jobs + ${stats.totalDuplicateJobs} duplicates`);
       stats.endTime = new Date();
       stats.durationSeconds = Math.round((stats.endTime - stats.startTime) / 1000);
       return stats;
     }
 
-    console.log("\n🗑️  Starting deletion of expired jobs...");
+    console.log("\n🗑️  Starting cleanup process...");
 
-    // Delete expired jobs with proper error handling
-    const deleteQuery = `
-      DELETE FROM job_vacancies 
-      WHERE end_date < NOW()
-      RETURNING data_source, job_id, job_title, end_date
-    `;
+    // Step 3: Remove duplicates first (keep the most recent one)
+    if (stats.totalDuplicateJobs > 0) {
+      console.log("🗑️  Removing duplicate jobs (keeping most recent)...");
+      const deleteDuplicatesQuery = `
+        DELETE FROM job_vacancies
+        WHERE id IN (
+          SELECT id FROM (
+            SELECT id,
+                   ROW_NUMBER() OVER (
+                       PARTITION BY job_id, data_source, organization_id 
+                       ORDER BY created DESC, id DESC
+                   ) AS rn
+            FROM job_vacancies
+          ) t
+          WHERE rn > 1
+        )
+        RETURNING data_source, job_id, job_title
+      `;
+      
+      const deleteDuplicatesResult = await client.query(deleteDuplicatesQuery);
+      stats.deletedDuplicateJobs = deleteDuplicatesResult.rowCount;
+      
+      console.log(`✅ Removed ${stats.deletedDuplicateJobs} duplicate jobs`);
+      
+      if (deleteDuplicatesResult.rows.length > 0) {
+        console.log("📝 Sample deleted duplicates:");
+        deleteDuplicatesResult.rows.slice(0, 3).forEach(job => {
+          console.log(`   🗑️  ${job.data_source.toUpperCase()}: "${job.job_title}"`);
+        });
+        if (deleteDuplicatesResult.rows.length > 3) {
+          console.log(`   ... and ${deleteDuplicatesResult.rows.length - 3} more duplicates`);
+        }
+      }
+    }
 
-    const deleteResult = await client.query(deleteQuery);
-    stats.deletedJobs = deleteResult.rowCount;
+    // Step 4: Remove expired jobs
 
-    // 🔄 Clear Redis cache after deleting expired jobs
-    if (stats.deletedJobs > 0) {
+    if (stats.totalExpiredJobs > 0) {
+      console.log("🗑️  Removing expired jobs...");
+      const deleteExpiredQuery = `
+        DELETE FROM job_vacancies 
+        WHERE end_date < NOW()
+        RETURNING data_source, job_id, job_title, end_date
+      `;
+
+      const deleteExpiredResult = await client.query(deleteExpiredQuery);
+      stats.deletedExpiredJobs = deleteExpiredResult.rowCount;
+      
+      console.log(`✅ Removed ${stats.deletedExpiredJobs} expired jobs`);
+      
+      // Log some examples of deleted jobs
+      if (deleteExpiredResult.rows.length > 0) {
+        console.log("📝 Sample deleted expired jobs:");
+        deleteExpiredResult.rows.slice(0, 3).forEach(job => {
+          console.log(`   🗑️  ${job.data_source.toUpperCase()}: "${job.job_title}" (expired: ${job.end_date.toDateString()})`);
+        });
+        
+        if (deleteExpiredResult.rows.length > 3) {
+          console.log(`   ... and ${deleteExpiredResult.rows.length - 3} more expired jobs`);
+        }
+      }
+    }
+
+    // 🔄 Clear Redis cache after cleanup
+    const deletedJobsCount = stats.deletedExpiredJobs + stats.deletedDuplicateJobs;
+    if (deletedJobsCount > 0) {
       try {
         const redisClient = require('../redisClient');
         
@@ -627,31 +720,24 @@ const cleanupExpiredJobs = async (client = null, dryRun = false) => {
       }
     }
 
-    // Log some examples of deleted jobs
-    if (deleteResult.rows.length > 0) {
-      console.log("\n📝 Sample deleted jobs:");
-      deleteResult.rows.slice(0, 5).forEach(job => {
-        console.log(`   🗑️  ${job.data_source.toUpperCase()}: "${job.job_title}" (expired: ${job.end_date.toDateString()})`);
-      });
-      
-      if (deleteResult.rows.length > 5) {
-        console.log(`   ... and ${deleteResult.rows.length - 5} more jobs`);
-      }
-    }
-
     stats.endTime = new Date();
     stats.durationSeconds = Math.round((stats.endTime - stats.startTime) / 1000);
 
-    console.log("\n✅ =========================================");
-    console.log("📅 Expired Job Cleanup Completed Successfully");
-    console.log(`🗑️  Deleted: ${stats.deletedJobs} expired jobs`);
+    const totalDeleted = stats.deletedExpiredJobs + stats.deletedDuplicateJobs;
+    const totalFound = stats.totalExpiredJobs + stats.totalDuplicateJobs;
+
+    console.log("\n✅ ==========================================");
+    console.log("📅 Database Cleanup Completed Successfully");
+    console.log(`🗑️  Total Deleted: ${totalDeleted} jobs`);
+    console.log(`   📅 Expired: ${stats.deletedExpiredJobs} jobs`);
+    console.log(`   🔄 Duplicates: ${stats.deletedDuplicateJobs} jobs`);
     console.log(`⏱️  Duration: ${stats.durationSeconds}s`);
-    console.log("=============================================");
+    console.log("============================================");
 
     // Log cleanup activity to ETL status table
-    await logETLStatus('expired_cleanup', 'success', {
-      processedCount: stats.totalExpiredJobs,
-      successCount: stats.deletedJobs,
+    await logETLStatus('database_cleanup', 'success', {
+      processedCount: totalFound,
+      successCount: totalDeleted,
       errorCount: stats.errorCount,
       startTime: stats.startTime,
       endTime: stats.endTime,
@@ -667,13 +753,14 @@ const cleanupExpiredJobs = async (client = null, dryRun = false) => {
     stats.durationSeconds = Math.round((stats.endTime - stats.startTime) / 1000);
 
     console.error("❌ ==========================================");
-    console.error("📅 Expired Job Cleanup Failed");
+    console.error("📅 Database Cleanup Failed");
     console.error(`❌ Error: ${error.message}`);
     console.error("=============================================");
 
     // Log failed cleanup
-    await logETLStatus('expired_cleanup', 'failed', {
-      processedCount: stats.totalExpiredJobs,
+    const totalFound = stats.totalExpiredJobs + stats.totalDuplicateJobs;
+    await logETLStatus('database_cleanup', 'failed', {
+      processedCount: totalFound,
       successCount: 0,
       errorCount: stats.errorCount,
       errorMessage: error.message,
@@ -688,6 +775,11 @@ const cleanupExpiredJobs = async (client = null, dryRun = false) => {
       await client.end();
     }
   }
+};
+
+// Backward compatibility wrapper for the old function name
+const cleanupExpiredJobs = async (client = null, dryRun = false) => {
+  return await cleanupExpiredAndDuplicateJobs(client, dryRun);
 };
 
 // Get statistics about jobs approaching expiration (within next N days)
@@ -740,5 +832,6 @@ module.exports = {
   getLatestETLStatus,
   getETLHistory,
   cleanupExpiredJobs,
+  cleanupExpiredAndDuplicateJobs,
   getJobsExpiringSoon,
 };

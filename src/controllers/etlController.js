@@ -88,6 +88,16 @@ module.exports.getDashboard = async (req, res) => {
       LIMIT 10;
     `);
     
+    // Get LinkedIn posting status
+    let linkedinStatus = [];
+    try {
+      const { getLatestLinkedInStatus } = require('../etl/social-media');
+      linkedinStatus = await getLatestLinkedInStatus();
+    } catch (linkedinError) {
+      console.warn('Could not fetch LinkedIn status:', linkedinError.message);
+      // Don't fail the entire dashboard if LinkedIn status fails
+    }
+    
     const dashboardData = {
       organizations: latestResult.rows,
       statistics: {
@@ -98,7 +108,8 @@ module.exports.getDashboard = async (req, res) => {
         avgDuration: parseFloat(stats.avg_duration) || 0,
         lastRunTime: stats.last_run_time
       },
-      recentActivity: recentResult.rows
+      recentActivity: recentResult.rows,
+      linkedinStatus: linkedinStatus
     };
     
     sendResponse(res, 200, true, dashboardData);

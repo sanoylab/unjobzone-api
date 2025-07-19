@@ -164,6 +164,13 @@ module.exports.postJobNetworkPostsToLinkedIn = async (jobNetwork) => {
 
     if (!jobPosts.length) {
       console.log(`No job posts found for job network: ${jobNetwork}`);
+      
+      // Log no content status
+      await logLinkedInStatus(`network_${jobNetwork.toLowerCase().replace(/[^a-z0-9]/g, '_')}`, 'no_content', {
+        jobsPosted: 0,
+        errorMessage: 'No jobs found for this network'
+      });
+      
       return;
     }
 
@@ -266,10 +273,24 @@ module.exports.postJobNetworkPostsToLinkedIn = async (jobNetwork) => {
 
     const linkedinResponse = await response.json();
     console.log("Successfully posted to LinkedIn:", linkedinResponse);
+    
+    // Log success status
+    await logLinkedInStatus(`network_${jobNetwork.toLowerCase().replace(/[^a-z0-9]/g, '_')}`, 'success', {
+      linkedinPostId: linkedinResponse.id,
+      jobsPosted: jobPosts.length
+    });
+    
     return linkedinResponse;
 
   } catch (error) {
     console.error(`Failed to post to LinkedIn for job network: ${jobNetwork}`, error);
+    
+    // Log failure status
+    await logLinkedInStatus(`network_${jobNetwork.toLowerCase().replace(/[^a-z0-9]/g, '_')}`, 'failed', {
+      jobsPosted: 0,
+      errorMessage: error.message
+    });
+    
     throw error;
   }
 };
@@ -331,6 +352,13 @@ module.exports.postExpiringSoonJobPostsToLinkedIn = async () => {
 
     if (!jobPosts.length) {
       console.log("No job posts found to share");
+      
+      // Log no content status
+      await logLinkedInStatus('expiring', 'no_content', {
+        jobsPosted: 0,
+        errorMessage: 'No jobs expiring today or tomorrow'
+      });
+      
       return;
     }
 
@@ -434,10 +462,24 @@ module.exports.postExpiringSoonJobPostsToLinkedIn = async () => {
 
     const linkedinResponse = await response.json();
     console.log("Successfully posted to LinkedIn:", linkedinResponse);
+    
+    // Log success status
+    await logLinkedInStatus('expiring', 'success', {
+      linkedinPostId: linkedinResponse.id,
+      jobsPosted: jobPosts.length
+    });
+    
     return linkedinResponse;
 
   } catch (error) {
     console.error("Failed to post to LinkedIn:", error);
+    
+    // Log failure status
+    await logLinkedInStatus('expiring', 'failed', {
+      jobsPosted: 0,
+      errorMessage: error.message
+    });
+    
     throw error;
   }
 };
@@ -536,6 +578,76 @@ module.exports.refreshLinkedInToken = async () => {
 };
 
 // Test function to verify LinkedIn ETL setup
+// Function to log LinkedIn posting status
+const logLinkedInStatus = async (postType, status, stats = {}) => {
+  try {
+    // Create table if it doesn't exist
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS linkedin_post_status (
+        id SERIAL PRIMARY KEY,
+        post_type VARCHAR(50) NOT NULL, -- 'expiring', 'network_it', 'network_political', etc.
+        status VARCHAR(20) NOT NULL, -- 'success', 'failed', 'no_content'
+        linkedin_post_id VARCHAR(255), -- The actual LinkedIn post ID
+        jobs_posted INTEGER DEFAULT 0,
+        error_message TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+    `);
+    
+    // Insert status
+    const query = `
+      INSERT INTO linkedin_post_status 
+      (post_type, status, linkedin_post_id, jobs_posted, error_message)
+      VALUES ($1, $2, $3, $4, $5)
+      RETURNING id;
+    `;
+    
+    const result = await pool.query(query, [
+      postType,
+      status,
+      stats.linkedinPostId || null,
+      stats.jobsPosted || 0,
+      stats.errorMessage || null
+    ]);
+    
+    return result.rows[0].id;
+    
+  } catch (error) {
+    console.error(`Error logging LinkedIn status for ${postType}:`, error);
+    return null;
+  }
+};
+
+// Function to get latest LinkedIn posting status
+const getLatestLinkedInStatus = async () => {
+  try {
+    const query = `
+      SELECT 
+        post_type,
+        status,
+        linkedin_post_id,
+        jobs_posted,
+        error_message,
+        created_at,
+        ROW_NUMBER() OVER (PARTITION BY post_type ORDER BY created_at DESC) as rn
+      FROM linkedin_post_status
+      WHERE created_at >= NOW() - INTERVAL '24 hours'
+      ORDER BY post_type, created_at DESC
+    `;
+    
+    const result = await pool.query(query);
+    
+    // Get only the latest status for each post type
+    const latestStatuses = result.rows.filter(row => row.rn === 1);
+    
+    return latestStatuses;
+    
+  } catch (error) {
+    console.error('Error getting latest LinkedIn status:', error);
+    return [];
+  }
+};
+
 module.exports.testLinkedInSetup = async () => {
   try {
     console.log('🧪 Testing LinkedIn ETL setup...');
@@ -547,7 +659,11 @@ module.exports.testLinkedInSetup = async () => {
     // Test 2: Check image directory
     console.log('2️⃣  Testing image directory...');
     const imagePath = getRandomImage();
-    console.log(`   ✅ Image found: ${path.basename(imagePath)}`);
+    if (imagePath) {
+      console.log(`   ✅ Image found: ${path.basename(imagePath)}`);
+    } else {
+      console.log(`   ⚠️  No images found, will use text-only posts`);
+    }
     
     // Test 3: Test database connection
     console.log('3️⃣  Testing database connection...');
@@ -574,6 +690,9 @@ module.exports.testLinkedInSetup = async () => {
     throw error;
   }
 };
+
+module.exports.logLinkedInStatus = logLinkedInStatus;
+module.exports.getLatestLinkedInStatus = getLatestLinkedInStatus;
 
 // Export utility function
 module.exports.validateLinkedInCredentials = validateLinkedInCredentials;
