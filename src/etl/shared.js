@@ -551,10 +551,12 @@ const cleanupExpiredAndDuplicateJobs = async (client = null, dryRun = false) => 
   };
 
   try {
-    // Step 1: Check for same-organization duplicates only
-    console.log("🔍 Step 1: Checking for same-organization duplicate jobs...");
+    // Step 1: Check for duplicates (same-org and cross-org)
+    console.log("🔍 Step 1: Checking for duplicate jobs...");
+    console.log("   📋 Same-org logic: Same organization + title + start/end dates + location = duplicate");
+    console.log("   📋 Cross-org logic: Same title + location + end date = duplicate (keep first posted)");
     
-    // Check for same-organization duplicates (same title+location within organization)
+    // Check for same-organization duplicates (same title + dates + location within organization)
     const sameOrgQuery = `
       SELECT 
         data_source,
@@ -564,48 +566,110 @@ const cleanupExpiredAndDuplicateJobs = async (client = null, dryRun = false) => 
         SELECT 
           data_source,
           job_title,
+          start_date,
+          end_date,
           duty_station,
           organization_id,
           COUNT(*) as duplicate_count
         FROM job_vacancies
-        GROUP BY job_title, duty_station, data_source, organization_id
+        GROUP BY job_title, start_date, end_date, duty_station, data_source, organization_id
         HAVING COUNT(*) > 1
       ) duplicates
       GROUP BY data_source
       ORDER BY total_duplicates DESC
     `;
     
-    const sameOrgResult = await client.query(sameOrgQuery);
-    const sameOrgDuplicates = sameOrgResult.rows.reduce((sum, row) => sum + parseInt(row.total_duplicates), 0);
-    
-    stats.totalDuplicateJobs = parseInt(sameOrgDuplicates);
-    
-    if (stats.totalDuplicateJobs > 0) {
-      console.log(`📊 Found ${stats.totalDuplicateJobs} same-organization duplicate jobs:`);
-      
-      sameOrgResult.rows.forEach(row => {
-        console.log(`   📁 ${row.data_source.toUpperCase()}: ${row.total_duplicates} duplicates in ${row.duplicate_groups} job groups`);
-      });
-      
-      // Show same-org examples
-      const sameOrgExampleQuery = `
+    // Check for cross-organization duplicates (same title + location + end_date)
+    const crossOrgQuery = `
+      SELECT 
+        COUNT(*) as duplicate_groups,
+        SUM(duplicate_count - 1) as total_duplicates
+      FROM (
         SELECT 
           job_title,
           duty_station,
-          data_source,
-          COUNT(*) as duplicate_count,
-          STRING_AGG(DISTINCT end_date::text, ' | ') as end_dates
+          end_date,
+          COUNT(*) as duplicate_count
         FROM job_vacancies
-        GROUP BY job_title, duty_station, data_source, organization_id
-        HAVING COUNT(*) > 1
-        ORDER BY duplicate_count DESC
-        LIMIT 3
-      `;
-      const sameOrgExampleResult = await client.query(sameOrgExampleQuery);
-      console.log("   📝 Examples of same-organization duplicates:");
-      sameOrgExampleResult.rows.forEach(row => {
-        console.log(`      🔄 ${row.data_source}: "${row.job_title}" in ${row.duty_station} (${row.duplicate_count} copies)`);
-      });
+        GROUP BY job_title, duty_station, end_date
+        HAVING COUNT(*) > 1 AND COUNT(DISTINCT data_source) > 1
+      ) duplicates
+    `;
+    
+    const [sameOrgResult, crossOrgResult] = await Promise.all([
+      client.query(sameOrgQuery),
+      client.query(crossOrgQuery)
+    ]);
+    
+    const sameOrgDuplicates = sameOrgResult.rows.reduce((sum, row) => sum + parseInt(row.total_duplicates), 0);
+    const crossOrgDuplicates = parseInt(crossOrgResult.rows[0]?.total_duplicates || 0);
+    
+    stats.totalDuplicateJobs = sameOrgDuplicates + crossOrgDuplicates;
+    
+    if (stats.totalDuplicateJobs > 0) {
+      console.log(`📊 Found ${stats.totalDuplicateJobs} duplicate jobs:`);
+      
+      if (sameOrgDuplicates > 0) {
+        console.log(`   🏢 Same-organization duplicates: ${sameOrgDuplicates} jobs`);
+        sameOrgResult.rows.forEach(row => {
+          console.log(`   📁 ${row.data_source.toUpperCase()}: ${row.total_duplicates} duplicates in ${row.duplicate_groups} job groups`);
+        });
+      }
+      
+      if (crossOrgDuplicates > 0) {
+        console.log(`   🌐 Cross-organization duplicates: ${crossOrgDuplicates} jobs`);
+      }
+      
+      // Show examples of cross-org duplicates
+      if (crossOrgDuplicates > 0) {
+        const crossOrgExampleQuery = `
+          SELECT 
+            job_title,
+            duty_station,
+            end_date,
+            COUNT(*) as duplicate_count,
+            STRING_AGG(DISTINCT data_source, ', ') as organizations
+          FROM job_vacancies
+          GROUP BY job_title, duty_station, end_date
+          HAVING COUNT(*) > 1 AND COUNT(DISTINCT data_source) > 1
+          ORDER BY duplicate_count DESC
+          LIMIT 3
+        `;
+        const crossOrgExampleResult = await client.query(crossOrgExampleQuery);
+        console.log("   📝 Examples of cross-organization duplicates:");
+        crossOrgExampleResult.rows.forEach(row => {
+          const endDate = row.end_date ? row.end_date.toDateString() : 'No end date';
+          console.log(`      🌐 "${row.job_title}" in ${row.duty_station} (ends: ${endDate})`);
+          console.log(`         Posted by: ${row.organizations} (${row.duplicate_count} copies)`);
+        });
+      }
+      
+      // Show examples of same-org duplicates  
+      if (sameOrgDuplicates > 0) {
+        const sameOrgExampleQuery = `
+          SELECT 
+            job_title,
+            start_date,
+            end_date,
+            duty_station,
+            data_source,
+            COUNT(*) as duplicate_count
+          FROM job_vacancies
+          GROUP BY job_title, start_date, end_date, duty_station, data_source, organization_id
+          HAVING COUNT(*) > 1
+          ORDER BY duplicate_count DESC
+          LIMIT 2
+        `;
+        const sameOrgExampleResult = await client.query(sameOrgExampleQuery);
+        if (sameOrgExampleResult.rows.length > 0) {
+          console.log("   📝 Examples of same-organization duplicates:");
+          sameOrgExampleResult.rows.forEach(row => {
+            const startDate = row.start_date ? row.start_date.toDateString() : 'No start date';
+            const endDate = row.end_date ? row.end_date.toDateString() : 'No end date';
+            console.log(`      🔄 ${row.data_source}: "${row.job_title}" in ${row.duty_station} (${startDate} to ${endDate}) - ${row.duplicate_count} copies`);
+          });
+        }
+      }
     } else {
       console.log("✅ No duplicate jobs found");
     }
@@ -663,38 +727,77 @@ const cleanupExpiredAndDuplicateJobs = async (client = null, dryRun = false) => 
 
     console.log("\n🗑️  Starting cleanup process...");
 
-    // Step 3: Remove same-organization duplicates only (keep the most recent one)
+    // Step 3: Remove duplicate jobs (keep the earliest posted)
     if (stats.totalDuplicateJobs > 0) {
-      console.log("🗑️  Removing same-organization duplicate jobs (keeping most recent)...");
+      console.log("🗑️  Removing duplicate jobs...");
       
-      const deleteSameOrgQuery = `
-        DELETE FROM job_vacancies
-        WHERE id IN (
-          SELECT id FROM (
-            SELECT id,
-                   ROW_NUMBER() OVER (
-                       PARTITION BY job_title, duty_station, data_source, organization_id 
-                       ORDER BY created DESC, id DESC
-                   ) AS rn
-            FROM job_vacancies
-          ) t
-          WHERE rn > 1
-        )
-        RETURNING data_source, job_id, job_title, duty_station, created
-      `;
+      let totalDeleted = 0;
+      const deletedSamples = [];
       
-      const deleteSameOrgResult = await client.query(deleteSameOrgQuery);
-      stats.deletedDuplicateJobs = deleteSameOrgResult.rowCount;
+      // First: Remove cross-organization duplicates (keep earliest posted)
+      if (crossOrgDuplicates > 0) {
+        console.log("   🌐 Removing cross-organization duplicates (keeping first posted)...");
+        const deleteCrossOrgQuery = `
+          DELETE FROM job_vacancies
+          WHERE id IN (
+            SELECT id FROM (
+              SELECT id,
+                     ROW_NUMBER() OVER (
+                         PARTITION BY job_title, duty_station, end_date
+                         ORDER BY created ASC, id ASC
+                     ) AS rn
+              FROM job_vacancies
+            ) t
+            WHERE rn > 1
+          )
+          RETURNING data_source, job_id, job_title, duty_station, end_date, created
+        `;
+        
+        const deleteCrossOrgResult = await client.query(deleteCrossOrgQuery);
+        totalDeleted += deleteCrossOrgResult.rowCount;
+        deletedSamples.push(...deleteCrossOrgResult.rows);
+        
+        console.log(`   ✅ Removed ${deleteCrossOrgResult.rowCount} cross-organization duplicates`);
+      }
       
-      console.log(`✅ Removed ${stats.deletedDuplicateJobs} same-organization duplicate jobs`);
+      // Second: Remove same-organization duplicates (keep most recent)
+      if (sameOrgDuplicates > 0) {
+        console.log("   🏢 Removing same-organization duplicates (keeping most recent)...");
+        const deleteSameOrgQuery = `
+          DELETE FROM job_vacancies
+          WHERE id IN (
+            SELECT id FROM (
+              SELECT id,
+                     ROW_NUMBER() OVER (
+                         PARTITION BY job_title, start_date, end_date, duty_station, data_source, organization_id 
+                         ORDER BY created DESC, id DESC
+                     ) AS rn
+              FROM job_vacancies
+            ) t
+            WHERE rn > 1
+          )
+          RETURNING data_source, job_id, job_title, start_date, end_date, duty_station, created
+        `;
+        
+        const deleteSameOrgResult = await client.query(deleteSameOrgQuery);
+        totalDeleted += deleteSameOrgResult.rowCount;
+        deletedSamples.push(...deleteSameOrgResult.rows);
+        
+        console.log(`   ✅ Removed ${deleteSameOrgResult.rowCount} same-organization duplicates`);
+      }
       
-      if (deleteSameOrgResult.rows.length > 0) {
+      stats.deletedDuplicateJobs = totalDeleted;
+      console.log(`✅ Total removed: ${totalDeleted} duplicate jobs`);
+      
+      if (deletedSamples.length > 0) {
         console.log("📝 Sample deleted duplicates:");
-        deleteSameOrgResult.rows.slice(0, 5).forEach(job => {
-          console.log(`   🗑️  ${job.data_source.toUpperCase()}: "${job.job_title}" in ${job.duty_station} (created: ${job.created.toDateString()})`);
+        deletedSamples.slice(0, 5).forEach(job => {
+          const startDate = job.start_date ? job.start_date.toDateString() : 'No start date';
+          const endDate = job.end_date ? job.end_date.toDateString() : 'No end date';
+          console.log(`   🗑️  ${job.data_source.toUpperCase()}: "${job.job_title}" in ${job.duty_station} (${startDate} to ${endDate})`);
         });
-        if (deleteSameOrgResult.rows.length > 5) {
-          console.log(`   ... and ${deleteSameOrgResult.rows.length - 5} more duplicates`);
+        if (deletedSamples.length > 5) {
+          console.log(`   ... and ${deletedSamples.length - 5} more duplicates`);
         }
       }
     }
