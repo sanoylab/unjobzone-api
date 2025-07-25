@@ -64,7 +64,9 @@ app.listen(PORT, () => {
   console.log(`API Server is started on PORT: ${PORT}`);
   runEtl();
 });
-
+app.get("/debug-sentry", function mainHandler(req, res) {
+  throw new Error("My first Sentry error!");
+});
 const runEtl = async () => {
   console.log("🚀 Starting complete ETL process...", new Date());
   
