@@ -6,6 +6,7 @@ const swaggerJsDoc = require("swagger-jsdoc");
 const swaggerUi = require("swagger-ui-express");
 
 const { options } = require("./util/swagger");
+require("./instrument.js");
 
 const { fetchAndProcessInspiraJobVacancies } = require("./etl/etl-inspira");
 const { fetchAndProcessWfpJobVacancies } = require("./etl/etl-wfp");
@@ -34,6 +35,7 @@ require("dotenv").config();
 const PORT = process.env.PORT;
 
 const errors = require("./error-middleware");
+const Sentry = require("@sentry/node");
 
 const router = require("./routers/index");
 const app = express();
@@ -41,6 +43,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 app.use("/api/v1", router);
+Sentry.setupExpressErrorHandler(app);
 
 
 
@@ -50,6 +53,12 @@ app.use("/api/v1", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 app.use(errors.notFound);
 app.use(errors.errorHandler);
+app.use(function onError(err, req, res, next) {
+  // The error id is attached to `res.sentry` to be returned
+  // and optionally displayed to the user for support.
+  res.statusCode = 500;
+  res.end(res.sentry + "\n");
+});
 
 app.listen(PORT, () => {
   console.log(`API Server is started on PORT: ${PORT}`);
