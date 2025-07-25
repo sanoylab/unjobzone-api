@@ -1,3 +1,6 @@
+// Import Sentry instrumentation FIRST - before any other imports
+require("./instrument.js");
+
 const express = require("express");
 const cors = require("cors");
 const cron = require("node-cron");
@@ -6,7 +9,6 @@ const swaggerJsDoc = require("swagger-jsdoc");
 const swaggerUi = require("swagger-ui-express");
 
 const { options } = require("./util/swagger");
-require("./instrument.js");
 
 const { fetchAndProcessInspiraJobVacancies } = require("./etl/etl-inspira");
 const { fetchAndProcessWfpJobVacancies } = require("./etl/etl-wfp");
@@ -29,7 +31,6 @@ const {
 //const { generateJobRelatedBlogPost } = require("./util/etl-blog");
 const { generateJobRelatedBlogPost } = require("./etl/etl-blog-deepseek");
 
-
 require("dotenv").config();
 
 const PORT = process.env.PORT;
@@ -42,31 +43,64 @@ const app = express();
 
 app.use(cors());
 app.use(express.json());
+
+// Debug route for testing Sentry
+app.get("/debug-sentry", function mainHandler(req, res) {
+  console.log("Debug Sentry - throwing test error");
+  throw new Error("My first Sentry error!");
+});
+
+// Additional Sentry testing routes
+app.get("/debug-sentry/async", async function asyncHandler(req, res) {
+  console.log("Debug Sentry - async error");
+  throw new Error("Async error test for Sentry!");
+});
+
+app.get("/debug-sentry/unhandled", function unhandledHandler(req, res) {
+  console.log("Debug Sentry - unhandled promise rejection");
+  Promise.reject(new Error("Unhandled promise rejection test!"));
+  res.json({ message: "Unhandled promise rejection triggered" });
+});
+
+app.get("/debug-sentry/test", function testHandler(req, res) {
+  const Sentry = require("@sentry/node");
+  
+  // Test different error types
+  try {
+    Sentry.addBreadcrumb({
+      message: 'Sentry test breadcrumb',
+      level: 'info',
+    });
+
+    Sentry.captureMessage('Test message from Sentry', 'info');
+    
+    res.json({ 
+      message: "Sentry test completed successfully",
+      environment: process.env.NODE_ENV || 'development',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    Sentry.captureException(error);
+    throw error;
+  }
+});
+
 app.use("/api/v1", router);
-Sentry.setupExpressErrorHandler(app);
-
-
 
 const swaggerSpec = swaggerJsDoc(options);
-
 app.use("/api/v1", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+
+// The Sentry error handler must be before any other error middleware and after all controllers
+Sentry.setupExpressErrorHandler(app);
 
 app.use(errors.notFound);
 app.use(errors.errorHandler);
-app.use(function onError(err, req, res, next) {
-  // The error id is attached to `res.sentry` to be returned
-  // and optionally displayed to the user for support.
-  res.statusCode = 500;
-  res.end(res.sentry + "\n");
-});
 
 app.listen(PORT, () => {
   console.log(`API Server is started on PORT: ${PORT}`);
   runEtl();
 });
-app.get("/debug-sentry", function mainHandler(req, res) {
-  throw new Error("My first Sentry error!");
-});
+
 const runEtl = async () => {
   console.log("🚀 Starting complete ETL process...", new Date());
   

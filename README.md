@@ -1,50 +1,50 @@
 
-# UN Job Zone - API
+# UN Job Zone ETL API
 
-UnJobZone.com, a revolutionary platform designed to streamline and enhance the job-seeking experience within the United Nations (UN) agencies. UnJobZone.com is a dynamic website that leverages cutting-edge technologies, including web scraping, artificial intelligence (AI), and natural language processing (NLP), to aggregate and present job vacancies from various UN agencies in an efficient and user-friendly manner.
+## Environment Variables
 
-
-## Authors
-
-- Yonas Yeneneh
-
-
-## Deployment
-
-Setup environment variable
-```bash
-  Create .env file under the root folder, add the following code
-  APP_URL="APP_URL"
-  PGUSER="PGUSER"
-  PGPASSWORD="PGPASSWORD"
-  PGPORT="PGPORT"
-  PGHOST="PGHOST"
-  PGDATABASE="PGDATABASE"
-  PGSSLMODE=require
-  PORT=PORT
-```
-
-To deploy this project run
+Make sure to set the following environment variables:
 
 ```bash
-  npm run dev
+# Application
+NODE_ENV=development # or production
+PORT=3000
+
+# Sentry Configuration (Optional)
+SENTRY_DEBUG=true # Set to true to enable Sentry in development
 ```
 
+## Sentry Error Monitoring
 
-## Installation
+This application includes Sentry for error monitoring and performance tracking. 
 
-Install my-project with npm
+### Configuration
+- Sentry is configured in `src/instrument.js`
+- In development, errors are only sent to Sentry if `SENTRY_DEBUG=true` is set
+- In production, all errors are automatically tracked
 
-```bash
-  npm install my-project
-  cd my-project
-```
-    
-## Badges
+### Testing Sentry Integration
 
-Add badges from somewhere like: [shields.io](https://shields.io/)
+You can test the Sentry integration using these endpoints:
 
-[![MIT License](https://img.shields.io/badge/License-MIT-green.svg)](https://choosealicense.com/licenses/mit/)
-[![GPLv3 License](https://img.shields.io/badge/License-GPL%20v3-yellow.svg)](https://opensource.org/licenses/)
-[![AGPL License](https://img.shields.io/badge/license-AGPL-blue.svg)](http://www.gnu.org/licenses/agpl-3.0)
+1. **Basic Error Test**: `GET /debug-sentry`
+   - Throws a simple synchronous error
+
+2. **Async Error Test**: `GET /debug-sentry/async` 
+   - Throws an asynchronous error
+
+3. **Unhandled Promise Test**: `GET /debug-sentry/unhandled`
+   - Triggers an unhandled promise rejection
+
+4. **Message Test**: `GET /debug-sentry/test`
+   - Sends test messages and breadcrumbs to Sentry
+
+### Features
+- Automatic error capture and reporting
+- Performance monitoring and profiling
+- Database query tracking (PostgreSQL)
+- HTTP request tracking
+- Breadcrumb collection for better debugging
+
+---
 
