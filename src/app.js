@@ -196,6 +196,24 @@ const runEtl = async () => {
           console.warn(`⚠️  ${name}: Could not clear Redis cache: ${redisError.message}`);
         }
         
+        // 🧹 Database cleanup after each organization's ETL
+        console.log(`🧹 ${name}: Running database cleanup (expired jobs + duplicates)...`);
+        try {
+          const { cleanupExpiredAndDuplicateJobs } = require("./etl/shared");
+          const cleanupStats = await cleanupExpiredAndDuplicateJobs();
+          
+          if (cleanupStats.deletedJobs > 0 || cleanupStats.deletedExpiredJobs > 0 || cleanupStats.deletedDuplicateJobs > 0) {
+            const totalDeleted = (cleanupStats.deletedJobs || 0) + (cleanupStats.deletedExpiredJobs || 0) + (cleanupStats.deletedDuplicateJobs || 0);
+            console.log(`🗑️  ${name}: Cleanup completed - ${totalDeleted} jobs removed (${cleanupStats.deletedExpiredJobs || 0} expired, ${cleanupStats.deletedDuplicateJobs || 0} duplicates)`);
+          } else {
+            console.log(`✅ ${name}: Database is clean - no expired or duplicate jobs found`);
+          }
+          
+        } catch (cleanupError) {
+          console.warn(`⚠️  ${name}: Database cleanup failed: ${cleanupError.message}`);
+          // Don't fail the entire ETL process if cleanup fails
+        }
+        
       } else {
         etlResults.failed.push({ name, error: result.error });
         etlResults.totalErrors++;
@@ -233,30 +251,34 @@ const runEtl = async () => {
     }
   }
   
-  // 🧹 Database Cleanup - Run after all organizations complete
-  // Clean up both expired jobs AND any duplicates that might have slipped through
-  console.log("\n🧹 Running database cleanup (expired jobs + duplicates)...");
+  // 🧹 Final Database Cleanup - Safety check after all organizations complete
+  // This is a final safety net to catch anything that might have been missed
+  console.log("\n🧹 Running final database cleanup (safety check)...");
   try {
     const { cleanupExpiredAndDuplicateJobs } = require("./etl/shared");
-    const cleanupStats = await cleanupExpiredAndDuplicateJobs();
+    const finalCleanupStats = await cleanupExpiredAndDuplicateJobs();
     
-    // Add cleanup results to ETL results
-    etlResults.expiredCleanup = {
-      totalExpiredJobs: cleanupStats.totalExpiredJobs,
-      deletedJobs: cleanupStats.deletedJobs,
-      errorCount: cleanupStats.errorCount,
-      durationSeconds: cleanupStats.durationSeconds
+    // Add final cleanup results to ETL results
+    etlResults.finalCleanup = {
+      totalExpiredJobs: finalCleanupStats.totalExpiredJobs,
+      totalDuplicateJobs: finalCleanupStats.totalDuplicateJobs,
+      deletedExpiredJobs: finalCleanupStats.deletedExpiredJobs || 0,
+      deletedDuplicateJobs: finalCleanupStats.deletedDuplicateJobs || 0,
+      errorCount: finalCleanupStats.errorCount || 0,
+      durationSeconds: finalCleanupStats.durationSeconds || 0
     };
     
-    if (cleanupStats.deletedJobs > 0) {
-      console.log(`🗑️  Cleanup completed: ${cleanupStats.deletedJobs} expired jobs removed`);
+    const totalFinalDeleted = (finalCleanupStats.deletedExpiredJobs || 0) + (finalCleanupStats.deletedDuplicateJobs || 0);
+    
+    if (totalFinalDeleted > 0) {
+      console.log(`🗑️  Final cleanup completed: ${totalFinalDeleted} jobs removed (${finalCleanupStats.deletedExpiredJobs || 0} expired, ${finalCleanupStats.deletedDuplicateJobs || 0} duplicates)`);
     } else {
-      console.log("✅ No expired jobs found - database is clean!");
+      console.log("✅ Final cleanup: Database is clean - no additional expired or duplicate jobs found!");
     }
     
   } catch (cleanupError) {
-    console.error("❌ Expired job cleanup failed:", cleanupError.message);
-    etlResults.expiredCleanup = { error: cleanupError.message };
+    console.error("❌ Final database cleanup failed:", cleanupError.message);
+    etlResults.finalCleanup = { error: cleanupError.message };
   }
   
   // ETL Summary Report
@@ -274,10 +296,18 @@ const runEtl = async () => {
   console.log(`📊 Total Organizations Processed: ${etlJobs.length}`);
   
   // Include cleanup summary
-  if (etlResults.expiredCleanup && !etlResults.expiredCleanup.error) {
-    console.log(`🧹 Expired Jobs Cleanup: ${etlResults.expiredCleanup.deletedJobs || 0} jobs removed`);
-  } else if (etlResults.expiredCleanup?.error) {
-    console.log(`❌ Expired Jobs Cleanup: Failed - ${etlResults.expiredCleanup.error}`);
+  console.log(`🧹 Database Cleanup Summary:`);
+  console.log(`   • Per-Organization Cleanup: Ran after each successful ETL`);
+  
+  if (etlResults.finalCleanup && !etlResults.finalCleanup.error) {
+    const totalFinalDeleted = (etlResults.finalCleanup.deletedExpiredJobs || 0) + (etlResults.finalCleanup.deletedDuplicateJobs || 0);
+    if (totalFinalDeleted > 0) {
+      console.log(`   • Final Safety Check: ${totalFinalDeleted} additional jobs removed (${etlResults.finalCleanup.deletedExpiredJobs || 0} expired, ${etlResults.finalCleanup.deletedDuplicateJobs || 0} duplicates)`);
+    } else {
+      console.log(`   • Final Safety Check: No additional cleanup needed - database was already clean`);
+    }
+  } else if (etlResults.finalCleanup?.error) {
+    console.log(`   ❌ Final Safety Check: Failed - ${etlResults.finalCleanup.error}`);
   }
   
   console.log(`⏰ ETL Process Completed: ${new Date()}`);
