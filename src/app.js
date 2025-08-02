@@ -19,6 +19,8 @@ const { fetchAndProcessUnwomenJobVacancies } = require("./etl/etl-unwomen");
 const { fetchAndProcessUnfpaJobVacancies } = require("./etl/etl-unfpa");
 const { fetchAndProcessIomJobVacancies } = require("./etl/etl-iom");
 const { fetchAndProcessIcaoJobVacancies } = require("./etl/etl-icao");
+const { fetchAndProcessUnicefJobVacancies } = require("./etl/etl-unicef");
+const { fetchAndProcessUnopsJobVacancies } = require("./etl/etl-unops");
 const { removeDuplicateJobVacancies } = require("./etl/shared");
 
 // Import social media functions
@@ -124,7 +126,9 @@ const runEtl = async () => {
     { name: 'UNWOMEN', func: fetchAndProcessUnwomenJobVacancies },
     { name: 'ICAO', func: fetchAndProcessIcaoJobVacancies },
     { name: 'UNFPA', func: fetchAndProcessUnfpaJobVacancies },
-    { name: 'IOM', func: fetchAndProcessIomJobVacancies }
+    { name: 'IOM', func: fetchAndProcessIomJobVacancies },
+    { name: 'UNICEF', func: fetchAndProcessUnicefJobVacancies },
+    { name: 'UNOPS', func: fetchAndProcessUnopsJobVacancies }
   ];
   
   // Process each organization with robust error handling
