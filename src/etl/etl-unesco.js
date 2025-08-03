@@ -312,20 +312,23 @@ const scrapeJobDetails = async (jobUrl, maxRetries = 3) => {
         }
       }
       
-      // Extract job description
+      // Extract job description from UNESCO's specific structure
       const descriptionSelectors = [
-        '.job-description',
-        '#job-description',
-        '[data-automation-id="jobPostingDescription"]',
-        '.vacancy-description',
-        '.job-details',
+        '.joblayouttoken',
+        '.jobDisplay',
+        '.job',
         '.content'
       ];
       
       for (const selector of descriptionSelectors) {
         const description = $(selector).text().trim();
-        if (description && description.length > 50) {
-          jobDetails.description = description;
+        if (description && description.length > 100) {
+          // Clean up the description - remove extra whitespace and normalize
+          const cleanDescription = description
+            .replace(/\s+/g, ' ')
+            .replace(/\n+/g, '\n')
+            .trim();
+          jobDetails.description = cleanDescription;
           break;
         }
       }
@@ -348,80 +351,75 @@ const scrapeJobDetails = async (jobUrl, maxRetries = 3) => {
         }
       }
       
-      // Extract location/duty station  
+      // Extract location/duty station from UNESCO's specific structure
       const locationSelectors = [
-        '.location',
-        '.duty-station',
-        '[data-automation-id="locations"]',
-        '.job-location',
-        'td:contains("Location") + td',
-        'strong:contains("Location") + *',
-        '.job-details td:contains("Location") + td'
+        '.joblayouttoken:contains("Duty Station")',
+        '.jobDisplay:contains("Duty Station")',
+        '.job:contains("Duty Station")'
       ];
       
       for (const selector of locationSelectors) {
-        const location = $(selector).text().trim();
-        if (location) {
-          jobDetails.location = location;
-          jobDetails.dutyStation = location;
-          break;
+        const content = $(selector).text();
+        if (content) {
+          // Extract duty station from text like "Duty Station: Kabul"
+          const dutyStationMatch = content.match(/Duty Station:\s*([^\n\r]+)/i);
+          if (dutyStationMatch) {
+            const location = dutyStationMatch[1].trim();
+            jobDetails.location = location;
+            jobDetails.dutyStation = location;
+            break;
+          }
         }
       }
       
-      // Extract deadline from various possible locations
+      // Extract deadline from UNESCO's specific structure
       const deadlineSelectors = [
-        '.deadline',
-        '.closing-date',
-        '[data-automation-id="deadline"]',
-        'td:contains("Closing date") + td',
-        'td:contains("closing date") + td',
-        'strong:contains("Closing date") + *',
-        'strong:contains("closing date") + *',
-        '.application-deadline',
-        '.job-deadline',
-        'div:contains("Closing date")',
-        'div:contains("closing date")'
+        '.joblayouttoken:contains("Closing date")',
+        '.jobDisplay:contains("Closing date")',
+        '.job:contains("Closing date")'
       ];
       
       for (const selector of deadlineSelectors) {
-        const deadlineText = $(selector).text().trim();
-        if (deadlineText) {
-          jobDetails.deadline = parseDeadline(deadlineText);
-          if (jobDetails.deadline) break;
+        const content = $(selector).text();
+        if (content) {
+          // Extract closing date from text like "Closing date: 14-Aug-2025"
+          const closingDateMatch = content.match(/Closing date:\s*([^\n\r]+)/i);
+          if (closingDateMatch) {
+            const deadlineText = closingDateMatch[1].trim();
+            jobDetails.deadline = parseDeadline(deadlineText);
+            if (jobDetails.deadline) break;
+          }
         }
       }
       
-      // Extract contract type and grade from job details
-      const detailSelectors = [
-        '.job-details tr',
-        '.vacancy-details tr',
-        '.job-info tr'
-      ];
-      
-      for (const selector of detailSelectors) {
-        $(selector).each((index, element) => {
-          const $row = $(element);
-          const label = $row.find('td:first-child, th:first-child').text().trim().toLowerCase();
-          const value = $row.find('td:last-child').text().trim();
-          
-          if (label.includes('type') || label.includes('post')) {
-            jobDetails.type = value;
-            jobDetails.contractType = value;
-          } else if (label.includes('grade') || label.includes('level')) {
-            jobDetails.grade = value;
-          } else if (label.includes('department') || label.includes('unit')) {
-            jobDetails.department = value;
-          } else if (label.includes('salary') || label.includes('compensation')) {
-            jobDetails.salary = value;
-          }
-        });
+      // Extract contract type and grade from UNESCO's specific structure
+      const content = $('.joblayouttoken, .jobDisplay, .job').text();
+      if (content) {
+        // Extract contract type from text like "Type of contract: Service Contract"
+        const contractMatch = content.match(/Type of contract:\s*([^\n\r]+)/i);
+        if (contractMatch) {
+          jobDetails.type = contractMatch[1].trim();
+          jobDetails.contractType = contractMatch[1].trim();
+        }
+        
+        // Extract grade from text like "Grade: Level 3"
+        const gradeMatch = content.match(/Grade:\s*([^\n\r]+)/i);
+        if (gradeMatch) {
+          jobDetails.grade = gradeMatch[1].trim();
+        }
+        
+        // Extract department from text like "Parent Sector: Education Sector (ED)"
+        const sectorMatch = content.match(/Parent Sector:\s*([^\n\r]+)/i);
+        if (sectorMatch) {
+          jobDetails.department = sectorMatch[1].trim();
+        }
       }
       
-      // Set default dates if not found
+      // Set dates properly
       if (!jobDetails.startDate) {
         jobDetails.startDate = new Date();
       }
-      if (!jobDetails.endDate && jobDetails.deadline) {
+      if (jobDetails.deadline) {
         jobDetails.endDate = jobDetails.deadline;
       } else if (!jobDetails.endDate) {
         // Default to 30 days from now if no deadline found
@@ -511,9 +509,9 @@ const fetchAndProcessUnescoJobVacancies = async () => {
           duty_station: jobDetails.dutyStation || job.location || '',
           organization_id: organizationId,
           data_source: 'UNESCO',
-          contract_type: jobDetails.contractType || job.type || '',
-          grade: jobDetails.grade || job.grade || '',
-          department: jobDetails.department || '',
+          recruitment_type: jobDetails.contractType || job.type || '',
+          job_level: jobDetails.grade || job.grade || '',
+          dept: jobDetails.department || '',
           salary: jobDetails.salary || '',
           apply_link: job.url
         };
