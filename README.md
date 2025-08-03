@@ -46,6 +46,30 @@ You can test the Sentry integration using these endpoints:
 - HTTP request tracking
 - Breadcrumb collection for better debugging
 
+## UNESCO ETL Integration
+
+The application now includes UNESCO job vacancy scraping from [careers.unesco.org](https://careers.unesco.org/go/All-jobs-openings/782502/).
+
+### Features
+- **Comprehensive Job Scraping**: Automatically extracts all UNESCO job postings with pagination support
+- **Detailed Job Information**: Scrapes individual job pages for complete details including descriptions, requirements, and metadata
+- **Smart Duplicate Handling**: Automatic title deduplication and job ID extraction
+- **Rate Limiting**: Respectful scraping with delays to avoid overwhelming the server
+- **Error Resilience**: Robust error handling with retry mechanisms
+
+### Data Extracted
+- Job Title
+- Job Description and Requirements  
+- Location/Duty Station
+- Contract Type and Grade
+- Application Deadline
+- Job URL and Apply Link
+
+### Schedule
+UNESCO ETL runs as part of the main ETL schedule:
+- **6:00 AM** - Morning ETL run
+- **6:00 PM** - Evening ETL run
+
 ## Database Cleanup Process
 
 The application now includes a comprehensive database cleanup process that runs automatically:
