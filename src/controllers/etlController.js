@@ -267,6 +267,10 @@ module.exports.getStatistics = async (req, res) => {
 // Get health check for ETL system with detailed organization status
 module.exports.getHealthCheck = async (req, res) => {
   try {
+    // Clean up stale running statuses first
+    const { cleanupStaleRunningStatuses } = require('../etl/shared');
+    await cleanupStaleRunningStatuses();
+
     // Get summary statistics
     const summaryQuery = `
       SELECT 
@@ -798,6 +802,141 @@ const diagnoseLinkedInDeployment = async (req, res) => {
   }
 };
 
+// =====================================================
+// FACEBOOK ETL CONTROLLERS
+// =====================================================
+
+// Test Facebook ETL configuration
+const testFacebookETL = async (req, res) => {
+  try {
+    console.log('🧪 Testing Facebook ETL configuration...');
+    
+    const { testFacebookSetup } = require('../etl/social-media');
+    await testFacebookSetup();
+    
+    sendResponse(res, 200, true, { 
+      message: 'Facebook ETL configuration test passed' 
+    }, 'Facebook ETL is properly configured');
+    
+  } catch (error) {
+    console.error('❌ Facebook ETL test failed:', error.message);
+    sendResponse(res, 500, false, null, 'Facebook ETL configuration test failed', error.message);
+  }
+};
+
+// Manual Facebook Post Trigger
+const triggerFacebookPost = async (req, res) => {
+  try {
+    const { type, jobNetwork } = req.body;
+    
+    console.log(`🚀 Manually triggering Facebook post - Type: ${type}, Network: ${jobNetwork || 'N/A'}`);
+    
+    const { 
+      postExpiringSoonJobPostsToFacebook, 
+      postJobNetworkPostsToFacebook 
+    } = require('../etl/social-media');
+    
+    let result;
+    
+    if (type === 'expiring') {
+      result = await postExpiringSoonJobPostsToFacebook();
+    } else if (type === 'network' && jobNetwork) {
+      result = await postJobNetworkPostsToFacebook(jobNetwork);
+    } else {
+      return sendResponse(res, 400, false, null, 'Invalid request. Use type: "expiring" or "network" with jobNetwork');
+    }
+    
+    sendResponse(res, 200, true, { 
+      facebookResponse: result,
+      message: 'Facebook post triggered successfully'
+    }, 'Facebook post completed successfully');
+    
+  } catch (error) {
+    console.error('❌ Manual Facebook post failed:', error);
+    sendResponse(res, 500, false, null, 'Facebook post failed', error.message);
+  }
+};
+
+// Trigger posts to both LinkedIn and Facebook
+const triggerBothPlatformsPosts = async (req, res) => {
+  try {
+    const { type, jobNetwork } = req.body;
+    
+    console.log(`🚀 Manually triggering posts to both platforms - Type: ${type}, Network: ${jobNetwork || 'N/A'}`);
+    
+    const { 
+      postExpiringSoonJobsToBothPlatforms, 
+      postJobNetworkPostsToBothPlatforms 
+    } = require('../etl/social-media');
+    
+    let results;
+    
+    if (type === 'expiring') {
+      results = await postExpiringSoonJobsToBothPlatforms();
+    } else if (type === 'network' && jobNetwork) {
+      results = await postJobNetworkPostsToBothPlatforms(jobNetwork);
+    } else {
+      return sendResponse(res, 400, false, null, 'Invalid request. Use type: "expiring" or "network" with jobNetwork');
+    }
+    
+    // Determine overall success
+    const successCount = (results.linkedin ? 1 : 0) + (results.facebook ? 1 : 0);
+    const totalPlatforms = 2;
+    const allSuccessful = successCount === totalPlatforms;
+    
+    const statusCode = allSuccessful ? 200 : (successCount > 0 ? 207 : 500); // 207 = Partial Success
+    const message = allSuccessful 
+      ? 'Posts successful on both platforms'
+      : successCount > 0 
+        ? 'Posts partially successful'
+        : 'Posts failed on both platforms';
+    
+    sendResponse(res, statusCode, allSuccessful, {
+      results,
+      summary: {
+        successCount,
+        totalPlatforms,
+        errors: results.errors
+      }
+    }, message);
+    
+  } catch (error) {
+    console.error('❌ Manual dual platform post failed:', error);
+    sendResponse(res, 500, false, null, 'Dual platform post failed', error.message);
+  }
+};
+
 module.exports.testLinkedInETL = testLinkedInETL;
 module.exports.triggerLinkedInPost = triggerLinkedInPost; 
-module.exports.diagnoseLinkedInDeployment = diagnoseLinkedInDeployment; 
+module.exports.diagnoseLinkedInDeployment = diagnoseLinkedInDeployment;
+
+// Clean up stale ETL statuses
+const cleanupStaleETLStatuses = async (req, res) => {
+  try {
+    console.log('🧹 Manually cleaning up stale ETL statuses...');
+    
+    const { cleanupStaleRunningStatuses } = require('../etl/shared');
+    const cleanedCount = await cleanupStaleRunningStatuses();
+    
+    const message = cleanedCount > 0 
+      ? `Cleaned up ${cleanedCount} stale 'running' statuses`
+      : 'No stale statuses found';
+    
+    sendResponse(res, 200, true, {
+      cleanedCount,
+      message
+    }, message);
+    
+  } catch (error) {
+    console.error('❌ Failed to cleanup stale ETL statuses:', error);
+    sendResponse(res, 500, false, null, 'Failed to cleanup stale ETL statuses', error.message);
+  }
+};
+
+// Export Facebook functions
+module.exports.testFacebookETL = testFacebookETL;
+module.exports.triggerFacebookPost = triggerFacebookPost;
+module.exports.triggerBothPlatformsPosts = triggerBothPlatformsPosts;
+
+// Export cleanup function
+module.exports.cleanupStaleETLStatuses = cleanupStaleETLStatuses; 

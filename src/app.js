@@ -115,8 +115,21 @@ const runEtl = async () => {
   };
   
   // Import the ETL utilities
-  const { logETLStatus, getJobCount } = require("./etl/shared");
+  const { logETLStatus, getJobCount, cleanupStaleRunningStatuses } = require("./etl/shared");
   
+  // 🧹 Clean up any stale 'running' statuses before starting new ETL
+  try {
+    console.log("🧹 Cleaning up stale 'running' statuses...");
+    const cleanedCount = await cleanupStaleRunningStatuses();
+    if (cleanedCount > 0) {
+      console.log(`✅ Cleaned up ${cleanedCount} stale 'running' statuses`);
+    } else {
+      console.log("✅ No stale 'running' statuses found");
+    }
+  } catch (cleanupError) {
+    console.warn("⚠️ Failed to cleanup stale statuses:", cleanupError.message);
+  }
+
   // Define ETL functions with their organization names
   const etlJobs = [
     { name: 'IMF', func: fetchAndProcessImfJobVacancies },
@@ -136,6 +149,7 @@ const runEtl = async () => {
   // Process each organization with robust error handling
   for (const { name, func } of etlJobs) {
     const startTime = new Date();
+    let statusLogged = false;
     
     try {
       console.log(`\n🏢 Processing ${name}...`);
@@ -161,6 +175,7 @@ const runEtl = async () => {
           errorCount: 0
         };
       } catch (error) {
+        console.error(`❌ ${name} ETL function threw error:`, error.message);
         result = {
           success: false,
           error: error.message,
@@ -188,6 +203,7 @@ const runEtl = async () => {
           errorCount: result.errorCount || 0,
           jobsInDb
         });
+        statusLogged = true;
         
         // 🔄 Clear Redis cache after successful ETL
         try {
@@ -235,25 +251,34 @@ const runEtl = async () => {
           errorMessage: result.error,
           jobsInDb
         });
+        statusLogged = true;
       }
       
     } catch (error) {
       const endTime = new Date();
       const durationSeconds = Math.round((endTime - startTime) / 1000);
-      const jobsInDb = await getJobCount(name);
       
       console.error(`❌ Critical error processing ${name}:`, error.message);
       etlResults.failed.push({ name, error: error.message });
       etlResults.totalErrors++;
       
-      // Log critical failure
-      await logETLStatus(name, 'failed', {
-        startTime,
-        endTime,
-        durationSeconds,
-        errorMessage: `Critical error: ${error.message}`,
-        jobsInDb
-      });
+      // Ensure status is logged even if there was a critical error
+      if (!statusLogged) {
+        try {
+          const jobsInDb = await getJobCount(name);
+          
+          // Log critical failure
+          await logETLStatus(name, 'failed', {
+            startTime,
+            endTime,
+            durationSeconds,
+            errorMessage: `Critical error: ${error.message}`,
+            jobsInDb
+          });
+        } catch (statusError) {
+          console.error(`❌ Failed to log status for ${name}:`, statusError.message);
+        }
+      }
     }
   }
   

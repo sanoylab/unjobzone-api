@@ -2,6 +2,7 @@ const e = require("express");
 const { Pool } = require("pg");
 const fs = require("fs");
 const path = require("path");
+const FormData = require('form-data');
 require("dotenv").config();
 const { credentials } = require("./db");
 
@@ -280,7 +281,29 @@ module.exports.postJobNetworkPostsToLinkedIn = async (jobNetwork) => {
       jobsPosted: jobPosts.length
     });
     
-    return linkedinResponse;
+    // 🔥 AUTOMATICALLY POST TO FACEBOOK AFTER LINKEDIN SUCCESS
+    try {
+      console.log(`📘 Auto-posting ${jobNetwork} jobs to Facebook after LinkedIn success...`);
+      const facebookResponse = await postJobNetworkPostsToFacebook(jobNetwork);
+      console.log(`✅ Facebook auto-posting successful for ${jobNetwork}`);
+      
+      // Return both responses
+      return {
+        linkedin: linkedinResponse,
+        facebook: facebookResponse,
+        autoPosted: true
+      };
+    } catch (facebookError) {
+      console.error(`⚠️ Facebook auto-posting failed for ${jobNetwork}:`, facebookError.message);
+      
+      // Return LinkedIn success with Facebook error
+      return {
+        linkedin: linkedinResponse,
+        facebook: null,
+        autoPosted: false,
+        facebookError: facebookError.message
+      };
+    }
 
   } catch (error) {
     console.error(`Failed to post to LinkedIn for job network: ${jobNetwork}`, error);
@@ -469,7 +492,29 @@ module.exports.postExpiringSoonJobPostsToLinkedIn = async () => {
       jobsPosted: jobPosts.length
     });
     
-    return linkedinResponse;
+    // 🔥 AUTOMATICALLY POST TO FACEBOOK AFTER LINKEDIN SUCCESS
+    try {
+      console.log(`📘 Auto-posting expiring jobs to Facebook after LinkedIn success...`);
+      const facebookResponse = await postExpiringSoonJobPostsToFacebook();
+      console.log(`✅ Facebook auto-posting successful for expiring jobs`);
+      
+      // Return both responses
+      return {
+        linkedin: linkedinResponse,
+        facebook: facebookResponse,
+        autoPosted: true
+      };
+    } catch (facebookError) {
+      console.error(`⚠️ Facebook auto-posting failed for expiring jobs:`, facebookError.message);
+      
+      // Return LinkedIn success with Facebook error
+      return {
+        linkedin: linkedinResponse,
+        facebook: null,
+        autoPosted: false,
+        facebookError: facebookError.message
+      };
+    }
 
   } catch (error) {
     console.error("Failed to post to LinkedIn:", error);
@@ -696,3 +741,489 @@ module.exports.getLatestLinkedInStatus = getLatestLinkedInStatus;
 
 // Export utility function
 module.exports.validateLinkedInCredentials = validateLinkedInCredentials;
+
+// =====================================================
+// FACEBOOK POSTING FUNCTIONALITY
+// =====================================================
+
+// Function to upload image to Facebook and get photo ID
+const uploadImageToFacebook = async (imagePath) => {
+  try {
+    const url = `https://graph.facebook.com/v18.0/${process.env.FACEBOOK_PAGE_ID}/photos`;
+    
+    const form = new FormData();
+    form.append('source', fs.createReadStream(imagePath));
+    form.append('published', 'false'); // Upload but don't publish yet
+    form.append('access_token', process.env.FACEBOOK_PAGE_ACCESS_TOKEN);
+
+    const response = await fetch(url, {
+      method: 'POST',
+      body: form
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error('Facebook Image Upload Error:', errorData);
+      throw new Error(`Facebook Image Upload error: ${errorData.error?.message || response.statusText}`);
+    }
+
+    const uploadResponse = await response.json();
+    return uploadResponse.id; // Returns photo ID
+  } catch (error) {
+    console.error('Error uploading image to Facebook:', error);
+    throw error;
+  }
+};
+
+// Utility function to validate Facebook credentials
+const validateFacebookCredentials = () => {
+  const requiredEnvVars = [
+    'FACEBOOK_APP_ID',
+    'FACEBOOK_APP_SECRET', 
+    'FACEBOOK_PAGE_ACCESS_TOKEN',
+    'FACEBOOK_PAGE_ID'
+  ];
+
+  const missing = requiredEnvVars.filter(varName => !process.env[varName]);
+  if (missing.length) {
+    console.error('❌ Facebook ETL Configuration Error:');
+    console.error(`   Missing required environment variables: ${missing.join(', ')}`);
+    console.error('');
+    console.error('💡 To fix this:');
+    console.error('   1. Create a Facebook Developer App at https://developers.facebook.com/');
+    console.error('   2. Create a Facebook Page for your business');
+    console.error('   3. Get your Page Access Token and Page ID');
+    console.error('   4. Add these to your .env file:');
+    console.error('      FACEBOOK_APP_ID=your_app_id');
+    console.error('      FACEBOOK_APP_SECRET=your_app_secret');
+    console.error('      FACEBOOK_PAGE_ACCESS_TOKEN=your_page_access_token');
+    console.error('      FACEBOOK_PAGE_ID=your_page_id');
+    throw new Error(`Missing required Facebook credentials: ${missing.join(', ')}`);
+  }
+  
+  console.log('✅ Facebook credentials validated successfully');
+};
+
+// Function to log Facebook posting status
+const logFacebookStatus = async (postType, status, stats = {}) => {
+  try {
+    // Create table if it doesn't exist
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS facebook_post_status (
+        id SERIAL PRIMARY KEY,
+        post_type VARCHAR(50) NOT NULL,
+        status VARCHAR(20) NOT NULL,
+        facebook_post_id VARCHAR(100),
+        jobs_posted INTEGER DEFAULT 0,
+        error_message TEXT,
+        stats JSONB,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+
+    // Insert status log
+    await pool.query(`
+      INSERT INTO facebook_post_status (post_type, status, facebook_post_id, jobs_posted, error_message, stats)
+      VALUES ($1, $2, $3, $4, $5, $6)
+    `, [
+      postType,
+      status,
+      stats.facebookPostId || null,
+      stats.jobsPosted || 0,
+      stats.errorMessage || null,
+      JSON.stringify(stats)
+    ]);
+
+    console.log(`📊 Facebook status logged: ${postType} - ${status}`);
+  } catch (error) {
+    console.error('Error logging Facebook status:', error);
+  }
+};
+
+// Post job network jobs to Facebook
+const postJobNetworkPostsToFacebook = async (jobNetwork) => {
+  try {
+    // Validate Facebook credentials first
+    validateFacebookCredentials();
+
+    // Get job posts (same query as LinkedIn)
+    const queryDistinct = `
+      SELECT DISTINCT ON (organization_id)
+        id, 
+        job_id, 
+        job_title,
+        duty_station,
+        job_level,
+        apply_link,
+        created,
+        end_date,
+        organization_id,
+        jn
+      FROM 
+        public.job_vacancies
+      WHERE 
+        jn = $1
+      ORDER BY organization_id, created DESC
+      LIMIT 5
+    `;
+
+    const resultDistinct = await pool.query(queryDistinct, [jobNetwork]);
+    let jobPosts = resultDistinct.rows;
+
+    // If less than 5 records, fill in with jobs from any organization
+    if (jobPosts.length < 5) {
+      const remainingSlots = 5 - jobPosts.length;
+      const queryFill = `
+        SELECT 
+          id, 
+          job_id, 
+          job_title,
+          duty_station,
+          job_level,
+          apply_link,
+          created,
+          end_date,
+          organization_id,
+          jn
+        FROM 
+          public.job_vacancies
+        WHERE 
+          jn = $1
+        ORDER BY created DESC
+        LIMIT ${remainingSlots}
+      `;
+
+      const resultFill = await pool.query(queryFill, [jobNetwork]);
+      jobPosts = jobPosts.concat(resultFill.rows);
+    }
+
+    if (!jobPosts.length) {
+      console.log(`No job posts found for job network: ${jobNetwork}`);
+      
+      await logFacebookStatus(`network_${jobNetwork.toLowerCase().replace(/[^a-z0-9]/g, '_')}`, 'no_content', {
+        jobsPosted: 0,
+        errorMessage: 'No jobs found for this network'
+      });
+      
+      return;
+    }
+
+    // Format message for Facebook (similar to LinkedIn but adapted)
+    let message = `🌐 New Job Opportunities in ${jobNetwork} Network!\n\n`;
+    jobPosts.forEach(job => {
+      message += `📌 ${job.job_title}\n`;
+      message += `📍 ${job.duty_station || 'Various locations'}\n`;
+      message += `🔗 Apply: https://www.unjobzone.com/job/${job.id}\n\n`;
+    });
+
+    message += `\n#UNJobs #${jobNetwork.replace(/\s+/g, '')}Jobs #InternationalCareers #Development #Humanitarian #UNJobZone`;
+
+    // Try to get a random image
+    const imagePath = getRandomImage();
+    let photoId = null;
+
+    if (imagePath) {
+      try {
+        photoId = await uploadImageToFacebook(imagePath);
+        console.log(`📸 Image uploaded to Facebook: ${photoId}`);
+      } catch (imageError) {
+        console.warn('⚠️ Image upload failed, posting without image:', imageError.message);
+      }
+    }
+
+    // Post to Facebook
+    const url = `https://graph.facebook.com/v18.0/${process.env.FACEBOOK_PAGE_ID}/feed`;
+    
+    const payload = {
+      message: message,
+      access_token: process.env.FACEBOOK_PAGE_ACCESS_TOKEN,
+      ...(photoId && { object_attachment: photoId })
+    };
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error('Facebook API Error Details:', errorData);
+      throw new Error(`Facebook API error: ${errorData.error?.message || response.statusText}`);
+    }
+
+    const facebookResponse = await response.json();
+    console.log("Successfully posted to Facebook:", facebookResponse);
+    
+    // Log success status
+    await logFacebookStatus(`network_${jobNetwork.toLowerCase().replace(/[^a-z0-9]/g, '_')}`, 'success', {
+      facebookPostId: facebookResponse.id,
+      jobsPosted: jobPosts.length
+    });
+    
+    return facebookResponse;
+
+  } catch (error) {
+    console.error(`Failed to post to Facebook for job network: ${jobNetwork}`, error);
+    
+    await logFacebookStatus(`network_${jobNetwork.toLowerCase().replace(/[^a-z0-9]/g, '_')}`, 'failed', {
+      jobsPosted: 0,
+      errorMessage: error.message
+    });
+    
+    throw error;
+  }
+};
+
+// Post expiring soon jobs to Facebook
+const postExpiringSoonJobPostsToFacebook = async () => {
+  try {
+    validateFacebookCredentials();
+
+    // Get expiring jobs (same query as LinkedIn)
+    const queryDistinct = `
+      SELECT DISTINCT ON (organization_id)
+        id, 
+        job_id, 
+        job_title,
+        duty_station,
+        job_level,
+        apply_link,
+        created,
+        end_date,
+        organization_id
+      FROM 
+        public.job_vacancies
+      WHERE 
+        DATE(end_date) = CURRENT_DATE OR DATE(end_date) = CURRENT_DATE + INTERVAL '1 day'
+      ORDER BY organization_id, created DESC
+      LIMIT 5
+    `;
+
+    const resultDistinct = await pool.query(queryDistinct);
+    let jobPosts = resultDistinct.rows;
+
+    if (jobPosts.length < 5) {
+      const remainingSlots = 5 - jobPosts.length;
+      const queryFill = `
+        SELECT 
+          id, 
+          job_id, 
+          job_title,
+          duty_station,
+          job_level,
+          apply_link,
+          created,
+          end_date,
+          organization_id
+        FROM 
+          public.job_vacancies
+        WHERE 
+          DATE(end_date) = CURRENT_DATE OR DATE(end_date) = CURRENT_DATE + INTERVAL '1 day'
+        ORDER BY created DESC
+        LIMIT ${remainingSlots}
+      `;
+
+      const resultFill = await pool.query(queryFill);
+      jobPosts = jobPosts.concat(resultFill.rows);
+    }
+
+    if (!jobPosts.length) {
+      console.log("No expiring job posts found to share on Facebook");
+      
+      await logFacebookStatus('expiring', 'no_content', {
+        jobsPosted: 0,
+        errorMessage: 'No jobs expiring today or tomorrow'
+      });
+      
+      return;
+    }
+
+    // Format message for Facebook
+    let message = `⏰ URGENT: Job Opportunities Closing Soon!\n\n`;
+    message += `Don't miss these amazing opportunities - applications close today or tomorrow:\n\n`;
+    
+    jobPosts.forEach(job => {
+      const endDate = new Date(job.end_date).toLocaleDateString();
+      message += `📌 ${job.job_title}\n`;
+      message += `📍 ${job.duty_station || 'Various locations'}\n`;
+      message += `⏳ Closes: ${endDate}\n`;
+      message += `🔗 Apply Now: https://www.unjobzone.com/job/${job.id}\n\n`;
+    });
+
+    message += `\n#UNJobs #JobDeadline #InternationalCareers #ApplyNow #LastChance #UNJobZone`;
+
+    // Try to get a random image
+    const imagePath = getRandomImage();
+    let photoId = null;
+
+    if (imagePath) {
+      try {
+        photoId = await uploadImageToFacebook(imagePath);
+        console.log(`📸 Image uploaded to Facebook: ${photoId}`);
+      } catch (imageError) {
+        console.warn('⚠️ Image upload failed, posting without image:', imageError.message);
+      }
+    }
+
+    // Post to Facebook
+    const url = `https://graph.facebook.com/v18.0/${process.env.FACEBOOK_PAGE_ID}/feed`;
+    
+    const payload = {
+      message: message,
+      access_token: process.env.FACEBOOK_PAGE_ACCESS_TOKEN,
+      ...(photoId && { object_attachment: photoId })
+    };
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error('Facebook API Error Details:', errorData);
+      throw new Error(`Facebook API error: ${errorData.error?.message || response.statusText}`);
+    }
+
+    const facebookResponse = await response.json();
+    console.log("Successfully posted to Facebook:", facebookResponse);
+    
+    await logFacebookStatus('expiring', 'success', {
+      facebookPostId: facebookResponse.id,
+      jobsPosted: jobPosts.length
+    });
+    
+    return facebookResponse;
+
+  } catch (error) {
+    console.error("Failed to post to Facebook:", error);
+    
+    await logFacebookStatus('expiring', 'failed', {
+      jobsPosted: 0,
+      errorMessage: error.message
+    });
+    
+    throw error;
+  }
+};
+
+// Combined function to post to both LinkedIn and Facebook
+const postJobNetworkPostsToBothPlatforms = async (jobNetwork) => {
+  const results = {
+    linkedin: null,
+    facebook: null,
+    errors: []
+  };
+
+  // Post to LinkedIn first
+  try {
+    console.log(`🔗 Posting ${jobNetwork} jobs to LinkedIn...`);
+    results.linkedin = await module.exports.postJobNetworkPostsToLinkedIn(jobNetwork);
+    console.log(`✅ LinkedIn posting successful for ${jobNetwork}`);
+  } catch (linkedinError) {
+    console.error(`❌ LinkedIn posting failed for ${jobNetwork}:`, linkedinError.message);
+    results.errors.push(`LinkedIn: ${linkedinError.message}`);
+  }
+
+  // Post to Facebook
+  try {
+    console.log(`📘 Posting ${jobNetwork} jobs to Facebook...`);
+    results.facebook = await postJobNetworkPostsToFacebook(jobNetwork);
+    console.log(`✅ Facebook posting successful for ${jobNetwork}`);
+  } catch (facebookError) {
+    console.error(`❌ Facebook posting failed for ${jobNetwork}:`, facebookError.message);
+    results.errors.push(`Facebook: ${facebookError.message}`);
+  }
+
+  return results;
+};
+
+// Combined function to post expiring jobs to both platforms
+const postExpiringSoonJobsToBothPlatforms = async () => {
+  const results = {
+    linkedin: null,
+    facebook: null,
+    errors: []
+  };
+
+  // Post to LinkedIn first
+  try {
+    console.log(`🔗 Posting expiring jobs to LinkedIn...`);
+    results.linkedin = await module.exports.postExpiringSoonJobPostsToLinkedIn();
+    console.log(`✅ LinkedIn posting successful for expiring jobs`);
+  } catch (linkedinError) {
+    console.error(`❌ LinkedIn posting failed for expiring jobs:`, linkedinError.message);
+    results.errors.push(`LinkedIn: ${linkedinError.message}`);
+  }
+
+  // Post to Facebook
+  try {
+    console.log(`📘 Posting expiring jobs to Facebook...`);
+    results.facebook = await postExpiringSoonJobPostsToFacebook();
+    console.log(`✅ Facebook posting successful for expiring jobs`);
+  } catch (facebookError) {
+    console.error(`❌ Facebook posting failed for expiring jobs:`, facebookError.message);
+    results.errors.push(`Facebook: ${facebookError.message}`);
+  }
+
+  return results;
+};
+
+// Test function for Facebook setup
+const testFacebookSetup = async () => {
+  try {
+    console.log('🧪 Testing Facebook ETL setup...');
+    
+    // Test 1: Validate credentials
+    console.log('1️⃣  Testing credentials validation...');
+    validateFacebookCredentials();
+    
+    // Test 2: Check image directory (reuse existing function)
+    console.log('2️⃣  Testing image directory...');
+    const imagePath = getRandomImage();
+    if (imagePath) {
+      console.log(`   ✅ Image found: ${path.basename(imagePath)}`);
+    } else {
+      console.log(`   ⚠️  No images found, will use text-only posts`);
+    }
+    
+    // Test 3: Test database connection
+    console.log('3️⃣  Testing database connection...');
+    await pool.query('SELECT COUNT(*) FROM job_vacancies LIMIT 1');
+    console.log('   ✅ Database connection successful');
+    
+    // Test 4: Test Facebook API connection
+    console.log('4️⃣  Testing Facebook API connection...');
+    const testUrl = `https://graph.facebook.com/v18.0/${process.env.FACEBOOK_PAGE_ID}?access_token=${process.env.FACEBOOK_PAGE_ACCESS_TOKEN}&fields=id,name`;
+    const testResponse = await fetch(testUrl);
+    
+    if (!testResponse.ok) {
+      const errorData = await testResponse.json();
+      throw new Error(`Facebook API test failed: ${errorData.error?.message}`);
+    }
+    
+    const pageData = await testResponse.json();
+    console.log(`   ✅ Facebook API connection successful - Page: ${pageData.name}`);
+    
+    console.log('\n🎉 All Facebook ETL tests passed!');
+    
+  } catch (error) {
+    console.error('❌ Facebook ETL setup test failed:', error.message);
+    throw error;
+  }
+};
+
+// Export Facebook functions
+module.exports.postJobNetworkPostsToFacebook = postJobNetworkPostsToFacebook;
+module.exports.postExpiringSoonJobPostsToFacebook = postExpiringSoonJobPostsToFacebook;
+module.exports.postJobNetworkPostsToBothPlatforms = postJobNetworkPostsToBothPlatforms;
+module.exports.postExpiringSoonJobsToBothPlatforms = postExpiringSoonJobsToBothPlatforms;
+module.exports.testFacebookSetup = testFacebookSetup;
+module.exports.validateFacebookCredentials = validateFacebookCredentials;
+module.exports.logFacebookStatus = logFacebookStatus;

@@ -166,7 +166,118 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- Facebook posting status tracking table
+CREATE TABLE IF NOT EXISTS facebook_post_status (
+    id SERIAL PRIMARY KEY,
+    post_type VARCHAR(50) NOT NULL,
+    status VARCHAR(20) NOT NULL CHECK (status IN ('success', 'failed', 'no_content')),
+    facebook_post_id VARCHAR(100),
+    jobs_posted INTEGER DEFAULT 0 CHECK (jobs_posted >= 0),
+    error_message TEXT,
+    stats JSONB,
+    created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
+);
+
+-- Performance indexes for Facebook status queries
+CREATE INDEX IF NOT EXISTS idx_facebook_status_type_created 
+    ON facebook_post_status(post_type, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_facebook_status_created 
+    ON facebook_post_status(created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_facebook_status_type_status 
+    ON facebook_post_status(post_type, status);
+
+-- View for latest Facebook status (used frequently)
+CREATE OR REPLACE VIEW latest_facebook_status AS
+SELECT DISTINCT ON (post_type) 
+    post_type,
+    status,
+    facebook_post_id,
+    jobs_posted,
+    error_message,
+    stats,
+    created_at
+FROM facebook_post_status 
+ORDER BY post_type, created_at DESC;
+
+-- Function to get Facebook posting statistics
+CREATE OR REPLACE FUNCTION get_facebook_statistics(days_back INTEGER DEFAULT 7)
+RETURNS TABLE (
+    total_posts INTEGER,
+    successful_posts INTEGER,
+    failed_posts INTEGER,
+    no_content_posts INTEGER,
+    success_rate NUMERIC,
+    total_jobs_posted INTEGER,
+    last_post_time TIMESTAMPTZ
+) AS $$
+BEGIN
+    RETURN QUERY
+    SELECT 
+        COUNT(*)::INTEGER as total_posts,
+        SUM(CASE WHEN f.status = 'success' THEN 1 ELSE 0 END)::INTEGER as successful_posts,
+        SUM(CASE WHEN f.status = 'failed' THEN 1 ELSE 0 END)::INTEGER as failed_posts,
+        SUM(CASE WHEN f.status = 'no_content' THEN 1 ELSE 0 END)::INTEGER as no_content_posts,
+        ROUND(
+            (SUM(CASE WHEN f.status = 'success' THEN 1 ELSE 0 END)::NUMERIC / NULLIF(COUNT(*), 0)) * 100, 
+            2
+        ) as success_rate,
+        SUM(f.jobs_posted)::INTEGER as total_jobs_posted,
+        MAX(f.created_at) as last_post_time
+    FROM facebook_post_status f
+    WHERE f.created_at >= NOW() - INTERVAL '1 day' * days_back;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Function to compare LinkedIn vs Facebook posting performance
+CREATE OR REPLACE FUNCTION get_social_media_comparison(days_back INTEGER DEFAULT 7)
+RETURNS TABLE (
+    platform VARCHAR,
+    total_posts INTEGER,
+    successful_posts INTEGER,
+    success_rate NUMERIC,
+    total_jobs_posted INTEGER,
+    last_post_time TIMESTAMPTZ
+) AS $$
+BEGIN
+    RETURN QUERY
+    SELECT 
+        'LinkedIn'::VARCHAR as platform,
+        COUNT(*)::INTEGER as total_posts,
+        SUM(CASE WHEN l.status = 'success' THEN 1 ELSE 0 END)::INTEGER as successful_posts,
+        ROUND(
+            (SUM(CASE WHEN l.status = 'success' THEN 1 ELSE 0 END)::NUMERIC / NULLIF(COUNT(*), 0)) * 100, 
+            2
+        ) as success_rate,
+        SUM(l.jobs_posted)::INTEGER as total_jobs_posted,
+        MAX(l.created_at) as last_post_time
+    FROM linkedin_post_status l
+    WHERE l.created_at >= NOW() - INTERVAL '1 day' * days_back
+    
+    UNION ALL
+    
+    SELECT 
+        'Facebook'::VARCHAR as platform,
+        COUNT(*)::INTEGER as total_posts,
+        SUM(CASE WHEN f.status = 'success' THEN 1 ELSE 0 END)::INTEGER as successful_posts,
+        ROUND(
+            (SUM(CASE WHEN f.status = 'success' THEN 1 ELSE 0 END)::NUMERIC / NULLIF(COUNT(*), 0)) * 100, 
+            2
+        ) as success_rate,
+        SUM(f.jobs_posted)::INTEGER as total_jobs_posted,
+        MAX(f.created_at) as last_post_time
+    FROM facebook_post_status f
+    WHERE f.created_at >= NOW() - INTERVAL '1 day' * days_back
+    
+    ORDER BY platform;
+END;
+$$ LANGUAGE plpgsql;
+
 -- Grant appropriate permissions (adjust roles as needed)
 -- GRANT SELECT ON latest_etl_status TO readonly_user;
+-- GRANT SELECT ON latest_facebook_status TO readonly_user;
 -- GRANT EXECUTE ON FUNCTION get_etl_statistics TO readonly_user;
--- GRANT EXECUTE ON FUNCTION get_org_performance TO readonly_user; 
+-- GRANT EXECUTE ON FUNCTION get_org_performance TO readonly_user;
+-- GRANT EXECUTE ON FUNCTION get_facebook_statistics TO readonly_user;
+-- GRANT EXECUTE ON FUNCTION get_social_media_comparison TO readonly_user; 

@@ -13,7 +13,11 @@ const {
   fixDatabaseSchema,
   testLinkedInETL,
   triggerLinkedInPost,
-  diagnoseLinkedInDeployment
+  diagnoseLinkedInDeployment,
+  testFacebookETL,
+  triggerFacebookPost,
+  triggerBothPlatformsPosts,
+  cleanupStaleETLStatuses
 } = require("../controllers/etlController");
 
 // Apply rate limiting to all ETL routes
@@ -596,5 +600,193 @@ router.post("/trigger-linkedin-post", auth, triggerLinkedInPost);
  *         description: Diagnostics failed
  */
 router.get("/diagnose-linkedin-deployment", diagnoseLinkedInDeployment);
+
+// =====================================================
+// FACEBOOK ETL ROUTES
+// =====================================================
+
+/**
+ * @swagger
+ * /api/v1/etl/test-facebook-etl:
+ *   get:
+ *     summary: Test Facebook ETL configuration
+ *     tags: [ETL Monitoring]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Facebook ETL configuration test passed
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/APIResponse'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       type: object
+ *                       properties:
+ *                         message:
+ *                           type: string
+ *       500:
+ *         description: Facebook ETL configuration test failed
+ */
+router.get("/test-facebook-etl", auth, testFacebookETL);
+
+/**
+ * @swagger
+ * /api/v1/etl/trigger-facebook-post:
+ *   post:
+ *     summary: Manually trigger Facebook job posting
+ *     tags: [Social Media]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - type
+ *             properties:
+ *               type:
+ *                 type: string
+ *                 enum: [expiring, network]
+ *                 description: Type of posting (expiring jobs or network-specific jobs)
+ *               jobNetwork:
+ *                 type: string
+ *                 description: Job network name (required when type is 'network')
+ *                 example: "IT"
+ *             example:
+ *               type: "network"
+ *               jobNetwork: "IT"
+ *     responses:
+ *       200:
+ *         description: Facebook post triggered successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/APIResponse'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       type: object
+ *                       properties:
+ *                         facebookResponse:
+ *                           type: object
+ *                         message:
+ *                           type: string
+ *       400:
+ *         description: Invalid request parameters
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Facebook posting failed
+ */
+router.post("/trigger-facebook-post", auth, triggerFacebookPost);
+
+/**
+ * @swagger
+ * /api/v1/etl/trigger-both-platforms-post:
+ *   post:
+ *     summary: Manually trigger posts to both LinkedIn and Facebook
+ *     tags: [Social Media]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - type
+ *             properties:
+ *               type:
+ *                 type: string
+ *                 enum: [expiring, network]
+ *                 description: Type of posting (expiring jobs or network-specific jobs)
+ *               jobNetwork:
+ *                 type: string
+ *                 description: Job network name (required when type is 'network')
+ *                 example: "IT"
+ *             example:
+ *               type: "expiring"
+ *     responses:
+ *       200:
+ *         description: Posts successful on both platforms
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/APIResponse'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       type: object
+ *                       properties:
+ *                         results:
+ *                           type: object
+ *                           properties:
+ *                             linkedin:
+ *                               type: object
+ *                             facebook:
+ *                               type: object
+ *                             errors:
+ *                               type: array
+ *                               items:
+ *                                 type: string
+ *                         summary:
+ *                           type: object
+ *                           properties:
+ *                             successCount:
+ *                               type: integer
+ *                             totalPlatforms:
+ *                               type: integer
+ *                             errors:
+ *                               type: array
+ *       207:
+ *         description: Posts partially successful (one platform succeeded)
+ *       400:
+ *         description: Invalid request parameters
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Posts failed on both platforms
+ */
+router.post("/trigger-both-platforms-post", auth, triggerBothPlatformsPosts);
+
+/**
+ * @swagger
+ * /api/v1/etl/cleanup-stale-statuses:
+ *   post:
+ *     summary: Clean up stale ETL 'running' statuses
+ *     tags: [ETL Monitoring]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Stale statuses cleaned up successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/APIResponse'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       type: object
+ *                       properties:
+ *                         cleanedCount:
+ *                           type: integer
+ *                           description: Number of stale statuses cleaned
+ *                         message:
+ *                           type: string
+ *       500:
+ *         description: Failed to cleanup stale statuses
+ */
+router.post("/cleanup-stale-statuses", auth, cleanupStaleETLStatuses);
 
 module.exports = router; 

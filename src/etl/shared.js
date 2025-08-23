@@ -427,6 +427,50 @@ const logETLStatus = async (organizationName, status, stats = {}) => {
   }
 };
 
+// Clean up stale 'running' statuses (older than 2 hours)
+const cleanupStaleRunningStatuses = async () => {
+  const { Client } = require('pg');
+  const { credentials } = require("./db");
+  
+  const client = new Client(credentials);
+  
+  try {
+    await client.connect();
+    
+    // Find stale running statuses (older than 2 hours without an end_time)
+    const staleQuery = `
+      UPDATE etl_status 
+      SET 
+        status = 'failed',
+        end_time = NOW(),
+        error_message = 'ETL process timed out or was interrupted',
+        duration_seconds = EXTRACT(EPOCH FROM (NOW() - start_time))::INTEGER
+      WHERE 
+        status = 'running' 
+        AND start_time < NOW() - INTERVAL '2 hours'
+        AND end_time IS NULL
+      RETURNING organization_name, start_time;
+    `;
+    
+    const result = await client.query(staleQuery);
+    
+    if (result.rows.length > 0) {
+      console.log(`🧹 Cleaned up ${result.rows.length} stale 'running' statuses:`);
+      result.rows.forEach(row => {
+        console.log(`   - ${row.organization_name} (started: ${row.start_time})`);
+      });
+    }
+    
+    return result.rows.length;
+    
+  } catch (error) {
+    console.error('Error cleaning up stale running statuses:', error);
+    return 0;
+  } finally {
+    await client.end();
+  }
+};
+
 // Get current job count for organization
 const getJobCount = async (organizationName) => {
   const { Client } = require('pg');
@@ -964,4 +1008,5 @@ module.exports = {
   cleanupExpiredJobs,
   cleanupExpiredAndDuplicateJobs,
   getJobsExpiringSoon,
+  cleanupStaleRunningStatuses,
 };
