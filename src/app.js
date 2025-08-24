@@ -115,7 +115,7 @@ const runEtl = async () => {
   };
   
   // Import the ETL utilities
-  const { logETLStatus, getJobCount, cleanupStaleRunningStatuses } = require("./etl/shared");
+  const { logETLStatus, getJobCount, cleanupStaleRunningStatuses, acquireETLLock, releaseETLLock } = require("./etl/shared");
   
   // 🧹 Clean up any stale 'running' statuses before starting new ETL
   try {
@@ -153,6 +153,14 @@ const runEtl = async () => {
     
     try {
       console.log(`\n🏢 Processing ${name}...`);
+      
+      // Acquire ETL lock to ensure only one organization runs at a time
+      const lockResult = await acquireETLLock(name);
+      if (!lockResult.acquired) {
+        console.log(`⏳ Skipping ${name}: ${lockResult.reason}`);
+        etlResults.failed.push({ name, error: lockResult.reason });
+        continue;
+      }
       
       // Log start status
       await logETLStatus(name, 'running', { 
@@ -205,6 +213,9 @@ const runEtl = async () => {
         });
         statusLogged = true;
         
+        // Release ETL lock
+        await releaseETLLock(name);
+        
         // 🔄 Clear Redis cache after successful ETL
         try {
           const redisClient = require('./redisClient');
@@ -252,6 +263,9 @@ const runEtl = async () => {
           jobsInDb
         });
         statusLogged = true;
+        
+        // Release ETL lock
+        await releaseETLLock(name);
       }
       
     } catch (error) {
@@ -267,18 +281,27 @@ const runEtl = async () => {
         try {
           const jobsInDb = await getJobCount(name);
           
-          // Log critical failure
-          await logETLStatus(name, 'failed', {
-            startTime,
-            endTime,
-            durationSeconds,
-            errorMessage: `Critical error: ${error.message}`,
-            jobsInDb
-          });
-        } catch (statusError) {
-          console.error(`❌ Failed to log status for ${name}:`, statusError.message);
-        }
-      }
+                     // Log critical failure
+           await logETLStatus(name, 'failed', {
+             startTime,
+             endTime,
+             durationSeconds,
+             errorMessage: `Critical error: ${error.message}`,
+             jobsInDb
+           });
+           
+           // Release ETL lock on critical failure
+           await releaseETLLock(name);
+         } catch (statusError) {
+           console.error(`❌ Failed to log status for ${name}:`, statusError.message);
+           // Still try to release lock even if status logging failed
+           try {
+             await releaseETLLock(name);
+           } catch (lockError) {
+             console.error(`❌ Failed to release lock for ${name}:`, lockError.message);
+           }
+         }
+       }
     }
   }
   

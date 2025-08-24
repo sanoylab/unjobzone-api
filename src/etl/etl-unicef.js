@@ -78,8 +78,15 @@ const scrapeJobListings = async () => {
     let loadedAllJobs = false;
     let clickAttempts = 0;
     const maxClickAttempts = 10; // Prevent infinite loops
+    const paginationStartTime = Date.now();
+    const maxPaginationTime = 5 * 60 * 1000; // 5 minutes maximum for pagination
     
     while (!loadedAllJobs && clickAttempts < maxClickAttempts) {
+      // Check for pagination timeout
+      if (Date.now() - paginationStartTime > maxPaginationTime) {
+        console.log("⚠️ Pagination timeout reached (5 minutes), stopping pagination");
+        break;
+      }
       try {
         // Look for "More Jobs" button or pagination buttons using multiple strategies
         let moreJobsButton = null;
@@ -355,6 +362,9 @@ const scrapeJobListings = async () => {
 // Scrape detailed job information from individual job page using Puppeteer
 const scrapeJobDetail = async (jobUrl, basicInfo = {}) => {
   let browser = null;
+  const jobDetailStartTime = Date.now();
+  const maxJobDetailTime = 2 * 60 * 1000; // 2 minutes maximum per job detail
+  
   try {
     await delay(1000); // 1 second delay to be respectful
     
@@ -373,11 +383,21 @@ const scrapeJobDetail = async (jobUrl, basicInfo = {}) => {
     
     console.log(`🔍 Fetching job details from: ${jobUrl}`);
     
+    // Check timeout before navigation
+    if (Date.now() - jobDetailStartTime > maxJobDetailTime) {
+      throw new Error('Job detail scraping timeout reached before navigation');
+    }
+    
     // Navigate to the job page
     await page.goto(jobUrl, { 
       waitUntil: 'networkidle2', 
       timeout: 30000 
     });
+    
+    // Check timeout after navigation
+    if (Date.now() - jobDetailStartTime > maxJobDetailTime) {
+      throw new Error('Job detail scraping timeout reached after navigation');
+    }
     
     // Wait for potential AWS WAF challenge to resolve
     await delay(3000);
@@ -717,6 +737,12 @@ const scrapeJobDetail = async (jobUrl, basicInfo = {}) => {
     
   } catch (error) {
     console.error(`❌ Error scraping job detail ${jobUrl}:`, error.message);
+    
+    // Check if it's a timeout error and log accordingly
+    if (error.message.includes('timeout')) {
+      console.warn(`⏰ Job detail scraping timed out for ${jobUrl} after ${Math.round((Date.now() - jobDetailStartTime) / 1000)}s`);
+    }
+    
     return {
       url: jobUrl,
       title: basicInfo.title || '',
@@ -732,7 +758,11 @@ const scrapeJobDetail = async (jobUrl, basicInfo = {}) => {
     };
   } finally {
     if (browser) {
-      await browser.close();
+      try {
+        await browser.close();
+      } catch (closeError) {
+        console.warn(`⚠️ Failed to close browser for ${jobUrl}:`, closeError.message);
+      }
     }
   }
 };

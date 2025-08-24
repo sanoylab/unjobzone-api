@@ -471,6 +471,86 @@ const cleanupStaleRunningStatuses = async () => {
   }
 };
 
+// ETL Mutex - Ensure only one organization runs ETL at a time
+const acquireETLLock = async (organizationName) => {
+  const { Client } = require('pg');
+  const { credentials } = require("./db");
+  
+  const client = new Client(credentials);
+  
+  try {
+    await client.connect();
+    
+    // Check if any other organization is currently running
+    const runningQuery = `
+      SELECT organization_name, start_time 
+      FROM etl_status 
+      WHERE status = 'running' 
+        AND organization_name != $1
+        AND start_time > NOW() - INTERVAL '4 hours'
+      ORDER BY start_time DESC
+      LIMIT 1;
+    `;
+    
+    const runningResult = await client.query(runningQuery, [organizationName]);
+    
+    if (runningResult.rows.length > 0) {
+      const runningOrg = runningResult.rows[0];
+      const timeSinceStart = Math.round((new Date() - new Date(runningOrg.start_time)) / 1000 / 60);
+      
+      console.log(`⏳ ETL lock denied: ${runningOrg.organization_name} is currently running (started ${timeSinceStart} minutes ago)`);
+      return { 
+        acquired: false, 
+        reason: `${runningOrg.organization_name} is currently running ETL`,
+        runningSince: runningOrg.start_time
+      };
+    }
+    
+    // Check if this organization is already running
+    const selfRunningQuery = `
+      SELECT start_time 
+      FROM etl_status 
+      WHERE status = 'running' 
+        AND organization_name = $1
+        AND start_time > NOW() - INTERVAL '4 hours'
+      ORDER BY start_time DESC
+      LIMIT 1;
+    `;
+    
+    const selfRunningResult = await client.query(selfRunningQuery, [organizationName]);
+    
+    if (selfRunningResult.rows.length > 0) {
+      const timeSinceStart = Math.round((new Date() - new Date(selfRunningResult.rows[0].start_time)) / 1000 / 60);
+      
+      console.log(`⏳ ETL lock denied: ${organizationName} is already running (started ${timeSinceStart} minutes ago)`);
+      return { 
+        acquired: false, 
+        reason: `${organizationName} is already running ETL`,
+        runningSince: selfRunningResult.rows[0].start_time
+      };
+    }
+    
+    console.log(`🔒 ETL lock acquired for ${organizationName}`);
+    return { acquired: true };
+    
+  } catch (error) {
+    console.error(`Error acquiring ETL lock for ${organizationName}:`, error);
+    return { 
+      acquired: false, 
+      reason: `Database error: ${error.message}` 
+    };
+  } finally {
+    await client.end();
+  }
+};
+
+// Release ETL lock (this happens automatically when status changes from 'running')
+const releaseETLLock = async (organizationName) => {
+  console.log(`🔓 ETL lock released for ${organizationName}`);
+  // Lock is automatically released when status changes from 'running' to 'success' or 'failed'
+  return true;
+};
+
 // Get current job count for organization
 const getJobCount = async (organizationName) => {
   const { Client } = require('pg');
@@ -1009,4 +1089,6 @@ module.exports = {
   cleanupExpiredAndDuplicateJobs,
   getJobsExpiringSoon,
   cleanupStaleRunningStatuses,
+  acquireETLLock,
+  releaseETLLock,
 };
