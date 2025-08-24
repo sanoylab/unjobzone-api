@@ -63,6 +63,10 @@ const validateDaysParam = (days) => {
 // Get overall ETL dashboard data with optimized queries
 module.exports.getDashboard = async (req, res) => {
   try {
+    // Clean up stale running statuses first
+    const { cleanupStaleRunningStatuses } = require('../etl/shared');
+    await cleanupStaleRunningStatuses();
+    
     // Use the optimized database function
     const statsResult = await pool.query('SELECT * FROM get_etl_statistics($1)', [7]);
     const stats = statsResult.rows[0] || {
@@ -939,4 +943,49 @@ module.exports.triggerFacebookPost = triggerFacebookPost;
 module.exports.triggerBothPlatformsPosts = triggerBothPlatformsPosts;
 
 // Export cleanup function
-module.exports.cleanupStaleETLStatuses = cleanupStaleETLStatuses; 
+module.exports.cleanupStaleETLStatuses = cleanupStaleETLStatuses;
+
+// Force cleanup of all running statuses (emergency fix)
+const forceCleanupAllRunningStatuses = async (req, res) => {
+  try {
+    console.log('🚨 Force cleaning up ALL running statuses...');
+    
+    const query = `
+      UPDATE etl_status 
+      SET 
+        status = 'failed',
+        end_time = NOW(),
+        error_message = 'Manually cleaned up - was stuck in running state',
+        duration_seconds = EXTRACT(EPOCH FROM (NOW() - start_time))::INTEGER
+      WHERE 
+        status = 'running' 
+        AND end_time IS NULL
+      RETURNING organization_name, start_time, created_at;
+    `;
+    
+    const result = await pool.query(query);
+    
+    const message = result.rows.length > 0 
+      ? `Force cleaned up ${result.rows.length} running statuses`
+      : 'No running statuses found to clean up';
+    
+    console.log(`✅ ${message}`);
+    if (result.rows.length > 0) {
+      result.rows.forEach(row => {
+        console.log(`   - ${row.organization_name} (started: ${row.start_time})`);
+      });
+    }
+    
+    sendResponse(res, 200, true, {
+      cleanedCount: result.rows.length,
+      cleanedOrganizations: result.rows,
+      message
+    }, message);
+    
+  } catch (error) {
+    console.error('❌ Failed to force cleanup running statuses:', error);
+    sendResponse(res, 500, false, null, 'Failed to force cleanup running statuses', error.message);
+  }
+};
+
+module.exports.forceCleanupAllRunningStatuses = forceCleanupAllRunningStatuses; 

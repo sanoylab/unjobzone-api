@@ -17,7 +17,8 @@ const {
   testFacebookETL,
   triggerFacebookPost,
   triggerBothPlatformsPosts,
-  cleanupStaleETLStatuses
+  cleanupStaleETLStatuses,
+  forceCleanupAllRunningStatuses
 } = require("../controllers/etlController");
 
 // Apply rate limiting to all ETL routes
@@ -788,5 +789,40 @@ router.post("/trigger-both-platforms-post", auth, triggerBothPlatformsPosts);
  *         description: Failed to cleanup stale statuses
  */
 router.post("/cleanup-stale-statuses", auth, cleanupStaleETLStatuses);
+
+/**
+ * @swagger
+ * /api/v1/etl/force-cleanup-running:
+ *   post:
+ *     summary: Force cleanup ALL running statuses (emergency fix)
+ *     tags: [ETL Monitoring]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: All running statuses force cleaned successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/APIResponse'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       type: object
+ *                       properties:
+ *                         cleanedCount:
+ *                           type: integer
+ *                           description: Number of running statuses cleaned
+ *                         cleanedOrganizations:
+ *                           type: array
+ *                           items:
+ *                             type: object
+ *                         message:
+ *                           type: string
+ *       500:
+ *         description: Failed to force cleanup running statuses
+ */
+router.post("/force-cleanup-running", auth, forceCleanupAllRunningStatuses);
 
 module.exports = router; 
