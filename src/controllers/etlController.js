@@ -285,7 +285,7 @@ module.exports.getHealthCheck = async (req, res) => {
       FROM latest_etl_status;
     `;
     
-    // Get detailed organization status including duration and job counts
+    // Get detailed organization status including duration, job counts, and progress tracking
     const organizationsQuery = `
       SELECT 
         organization_name,
@@ -298,6 +298,9 @@ module.exports.getHealthCheck = async (req, res) => {
         success_count,
         error_count,
         error_message,
+        current_step,
+        progress_percent,
+        estimated_remaining_seconds,
         created_at,
         CASE 
           WHEN created_at >= NOW() - INTERVAL '6 hours' THEN 'recent'
@@ -305,7 +308,14 @@ module.exports.getHealthCheck = async (req, res) => {
           ELSE 'older'
         END as recency
       FROM latest_etl_status
-      ORDER BY organization_name;
+      ORDER BY 
+        CASE 
+          WHEN status = 'running' THEN 1
+          WHEN status = 'failed' THEN 2
+          WHEN status = 'success' THEN 3
+          ELSE 4
+        END,
+        organization_name;
     `;
     
     const [summaryResult, orgsResult] = await Promise.all([
@@ -332,7 +342,7 @@ module.exports.getHealthCheck = async (req, res) => {
     const isHealthy = stats.totalOrganizations > 0 && stats.recentRuns > 0;
     const systemStatus = isHealthy ? 'healthy' : 'degraded';
     
-    // Format organizations data for dashboard
+    // Format organizations data for dashboard with enhanced tracking
     const formattedOrgs = organizations.map(org => ({
       name: org.organization_name,
       status: org.status || 'idle',
@@ -343,9 +353,15 @@ module.exports.getHealthCheck = async (req, res) => {
       successCount: parseInt(org.success_count) || 0,
       errorCount: parseInt(org.error_count) || 0,
       errorMessage: org.error_message,
+      currentStep: org.current_step,
+      progressPercent: parseInt(org.progress_percent) || 0,
+      estimatedRemainingSeconds: org.estimated_remaining_seconds,
       recency: org.recency,
       startTime: org.start_time,
-      endTime: org.end_time
+      endTime: org.end_time,
+      // Calculate estimated completion time if running
+      estimatedCompletion: org.status === 'running' && org.estimated_remaining_seconds ? 
+        new Date(Date.now() + (org.estimated_remaining_seconds * 1000)).toISOString() : null
     }));
     
     sendResponse(res, isHealthy ? 200 : 503, true, {

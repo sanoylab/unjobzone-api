@@ -21,8 +21,8 @@ const {
   forceCleanupAllRunningStatuses
 } = require("../controllers/etlController");
 
-// Apply rate limiting to all ETL routes
-router.use(rateLimiter(15 * 60 * 1000, 100)); // 100 requests per 15 minutes
+// Apply rate limiting to all ETL routes - increased for testing
+router.use(rateLimiter(15 * 60 * 1000, 10000)); // 10,000 requests per 15 minutes
 
 // Public routes (no authentication required)
 // Serve the dashboard HTML page

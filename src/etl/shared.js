@@ -367,7 +367,7 @@ const upsertJobVacancy = async (client, jobData, organizationName) => {
  * ETL Status Tracking for Dashboard
  */
 
-// Store ETL run status in database
+// Store ETL run status in database with enhanced tracking
 const logETLStatus = async (organizationName, status, stats = {}) => {
   const { Client } = require('pg');
   const { credentials } = require("./db");
@@ -377,30 +377,47 @@ const logETLStatus = async (organizationName, status, stats = {}) => {
   try {
     await client.connect();
     
-    // Create table if it doesn't exist
+    // Create table if it doesn't exist with enhanced fields
     await client.query(`
       CREATE TABLE IF NOT EXISTS etl_status (
         id SERIAL PRIMARY KEY,
         organization_name VARCHAR(50) NOT NULL,
-        status VARCHAR(20) NOT NULL, -- 'running', 'success', 'failed'
-        processed_count INTEGER DEFAULT 0,
-        success_count INTEGER DEFAULT 0,
-        error_count INTEGER DEFAULT 0,
+        status VARCHAR(20) NOT NULL CHECK (status IN ('running', 'success', 'failed', 'starting', 'stopping', 'cancelled')),
+        processed_count INTEGER DEFAULT 0 CHECK (processed_count >= 0),
+        success_count INTEGER DEFAULT 0 CHECK (success_count >= 0),
+        error_count INTEGER DEFAULT 0 CHECK (error_count >= 0),
         error_message TEXT,
         start_time TIMESTAMPTZ,
         end_time TIMESTAMPTZ,
-        duration_seconds INTEGER,
-        jobs_in_db INTEGER DEFAULT 0,
-        created_at TIMESTAMPTZ DEFAULT NOW()
+        duration_seconds INTEGER CHECK (duration_seconds >= 0),
+        jobs_in_db INTEGER DEFAULT 0 CHECK (jobs_in_db >= 0),
+        current_step VARCHAR(100), -- Track current step of ETL process
+        progress_percent INTEGER DEFAULT 0 CHECK (progress_percent >= 0 AND progress_percent <= 100),
+        estimated_remaining_seconds INTEGER,
+        created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+        
+        -- Enhanced constraints
+        CONSTRAINT valid_counts CHECK (success_count + error_count <= processed_count),
+        CONSTRAINT valid_time_range CHECK (end_time IS NULL OR end_time >= start_time)
       );
     `);
+
+    // Add new columns if they don't exist (for existing databases)
+    await client.query(`
+      ALTER TABLE etl_status 
+      ADD COLUMN IF NOT EXISTS current_step VARCHAR(100),
+      ADD COLUMN IF NOT EXISTS progress_percent INTEGER DEFAULT 0 CHECK (progress_percent >= 0 AND progress_percent <= 100),
+      ADD COLUMN IF NOT EXISTS estimated_remaining_seconds INTEGER;
+    `);
     
-    // Insert or update status
+    console.log(`📊 Logging ETL status for ${organizationName}: ${status}${stats.currentStep ? ` - ${stats.currentStep}` : ''}`);
+    
+    // Insert or update status with enhanced tracking
     const query = `
       INSERT INTO etl_status 
       (organization_name, status, processed_count, success_count, error_count, error_message, 
-       start_time, end_time, duration_seconds, jobs_in_db)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       start_time, end_time, duration_seconds, jobs_in_db, current_step, progress_percent, estimated_remaining_seconds)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
       RETURNING id;
     `;
     
@@ -414,13 +431,64 @@ const logETLStatus = async (organizationName, status, stats = {}) => {
       stats.startTime || null,
       stats.endTime || null,
       stats.durationSeconds || null,
-      stats.jobsInDb || 0
+      stats.jobsInDb || 0,
+      stats.currentStep || null,
+      stats.progressPercent || 0,
+      stats.estimatedRemainingSeconds || null
     ]);
     
     return result.rows[0].id;
     
   } catch (error) {
     console.error(`Error logging ETL status for ${organizationName}:`, error);
+    return null;
+  } finally {
+    await client.end();
+  }
+};
+
+// Update ETL progress during execution
+const updateETLProgress = async (organizationName, progressPercent, currentStep, estimatedRemainingSeconds = null) => {
+  const { Client } = require('pg');
+  const { credentials } = require("./db");
+  
+  const client = new Client(credentials);
+  
+  try {
+    await client.connect();
+    
+    console.log(`📈 ${organizationName}: ${Math.round(progressPercent)}% - ${currentStep}`);
+    
+    // Update the latest running entry for this organization
+    const query = `
+      UPDATE etl_status 
+      SET 
+        progress_percent = $1,
+        current_step = $2,
+        estimated_remaining_seconds = $3,
+        created_at = NOW()
+      WHERE organization_name = $4 
+        AND status = 'running'
+        AND id = (
+          SELECT id FROM etl_status 
+          WHERE organization_name = $4 AND status = 'running'
+          ORDER BY created_at DESC 
+          LIMIT 1
+        )
+      RETURNING id;
+    `;
+    
+    const result = await client.query(query, [
+      Math.round(progressPercent),
+      currentStep,
+      estimatedRemainingSeconds,
+      organizationName
+    ]);
+    
+    return result.rows.length > 0 ? result.rows[0].id : null;
+    
+  } catch (error) {
+    console.error(`Error updating ETL progress for ${organizationName}:`, error);
     return null;
   } finally {
     await client.end();
@@ -1072,16 +1140,109 @@ const getJobsExpiringSoon = async (daysAhead = 7) => {
   }
 };
 
+// Enhanced ETL execution wrapper with progress tracking
+const executeETLWithProgressTracking = async (organizationName, etlFunction) => {
+  const startTime = new Date();
+  
+  try {
+    // Check and acquire ETL lock
+    const lockResult = await acquireETLLock(organizationName);
+    if (!lockResult.acquired) {
+      console.log(`⏳ ${organizationName}: ETL lock denied - ${lockResult.reason}`);
+      return {
+        success: false,
+        error: `ETL already running: ${lockResult.reason}`,
+        organizationName: organizationName
+      };
+    }
+
+    console.log(`🚀 Starting enhanced ETL for ${organizationName}...`);
+    
+    // Log starting status
+    await logETLStatus(organizationName, 'starting', {
+      startTime: startTime,
+      currentStep: 'Initializing ETL process...',
+      progressPercent: 0
+    });
+
+    // Update to running status
+    await logETLStatus(organizationName, 'running', {
+      startTime: startTime,
+      currentStep: 'Starting data collection...',
+      progressPercent: 5
+    });
+
+    // Execute the ETL function with progress updates
+    const result = await etlFunction({
+      updateProgress: async (percent, step, estimatedRemaining = null) => {
+        await updateETLProgress(organizationName, percent, step, estimatedRemaining);
+      },
+      organizationName: organizationName
+    });
+
+    const endTime = new Date();
+    const durationSeconds = Math.round((endTime - startTime) / 1000);
+
+    if (result.success) {
+      // Log success status
+      await logETLStatus(organizationName, 'success', {
+        startTime: startTime,
+        endTime: endTime,
+        durationSeconds: durationSeconds,
+        processedCount: result.processedCount || 0,
+        successCount: result.successCount || 0,
+        errorCount: result.errorCount || 0,
+        jobsInDb: result.jobsInDb || 0,
+        currentStep: 'ETL completed successfully',
+        progressPercent: 100
+      });
+
+      console.log(`✅ ${organizationName}: Enhanced ETL completed successfully in ${durationSeconds}s`);
+      console.log(`📈 ${organizationName}: Processed ${result.processedCount} jobs, ${result.successCount} inserted, ${result.errorCount} errors`);
+      
+      return result;
+    } else {
+      throw new Error(result.error || 'ETL function returned failure');
+    }
+    
+  } catch (error) {
+    const endTime = new Date();
+    const durationSeconds = Math.round((endTime - startTime) / 1000);
+    
+    // Log failed status
+    await logETLStatus(organizationName, 'failed', {
+      startTime: startTime,
+      endTime: endTime,
+      durationSeconds: durationSeconds,
+      errorMessage: error.message,
+      currentStep: 'ETL process failed',
+      progressPercent: 0
+    });
+    
+    console.error(`❌ ${organizationName}: Enhanced ETL failed after ${durationSeconds}s:`, error.message);
+    
+    return {
+      success: false,
+      error: error.message,
+      organizationName: organizationName
+    };
+  } finally {
+    await releaseETLLock(organizationName);
+  }
+};
+
 module.exports = {
   getOrganizationId,
   removeDuplicateJobVacancies,
   validateJobData,
   safeApiCall,
   executeETLWithTransaction,
+  executeETLWithProgressTracking,
   processJobSafely,
   checkApiHealth,
   upsertJobVacancy,
   logETLStatus,
+  updateETLProgress,
   getJobCount,
   getLatestETLStatus,
   getETLHistory,

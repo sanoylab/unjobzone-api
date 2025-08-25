@@ -63,7 +63,7 @@ module.exports.validateInput = (schema) => {
 };
 
 // Rate limiting middleware for API protection
-module.exports.rateLimiter = (windowMs = 15 * 60 * 1000, max = 100) => {
+module.exports.rateLimiter = (windowMs = 15 * 60 * 1000, max = 1000) => {
   const requests = new Map();
   
   return (req, res, next) => {
