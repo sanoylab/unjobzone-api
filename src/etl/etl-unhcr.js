@@ -13,13 +13,15 @@ async function fetchAndProcessUnhcrJobVacancies() {
   console.log("==================================");
 
   const client = new Client(credentials);
-  await client.connect();
-
-  let page = 0;
-  const itemsPerPage = 20; // items per page
-  let totalPages = 1; // Initialize to 1 to enter the loop
   let totalProcessed = 0;
   let totalErrors = 0;
+
+  try {
+    await client.connect();
+
+    let page = 0;
+    const itemsPerPage = 20; // items per page
+    let totalPages = 1; // Initialize to 1 to enter the loop
 
   while (page < totalPages) {
     const payload = {
@@ -117,13 +119,44 @@ async function fetchAndProcessUnhcrJobVacancies() {
     }
   }
 
-  await client.end(); // Close the database connection
-  
+  } catch (error) {
+    console.error('❌ UNHCR ETL failed:', error.message);
+    
+    await client.end();
+    
+    console.log("==================================");
+    console.log(`UNHCR ETL Summary (FAILED):`);
+    console.log(`📊 Total processed: ${totalProcessed} jobs`);
+    console.log(`❌ Errors encountered: ${totalErrors} jobs`);
+    console.log(`❌ Critical error: ${error.message}`);
+    console.log("==================================");
+    
+    return {
+      success: false,
+      error: error.message,
+      processedCount: totalProcessed + totalErrors,
+      successCount: totalProcessed,
+      errorCount: totalErrors
+    };
+  } finally {
+    if (client && !client._ending) {
+      await client.end();
+    }
+  }
+
+  // Success case
   console.log("==================================");
-  console.log(`UNHCR ETL Summary:`);
+  console.log(`UNHCR ETL Summary (SUCCESS):`);
   console.log(`✅ Successfully processed: ${totalProcessed} jobs`);
   console.log(`❌ Errors encountered: ${totalErrors} jobs`);
   console.log("==================================");
+  
+  return {
+    success: true,
+    processedCount: totalProcessed + totalErrors,
+    successCount: totalProcessed,
+    errorCount: totalErrors
+  };
 }
 
 module.exports = { fetchAndProcessUnhcrJobVacancies };

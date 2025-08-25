@@ -904,17 +904,46 @@ async function fetchAndProcessUnicefJobVacancies() {
     
   } catch (error) {
     console.error('❌ UNICEF ETL failed:', error.message);
-    throw error;
-  } finally {
+    
     await client.end();
     
     console.log("==================================");
-    console.log(`UNICEF ETL Summary:`);
+    console.log(`UNICEF ETL Summary (FAILED):`);
     console.log(`📊 Total processed: ${totalProcessed} jobs`);
     console.log(`✅ Successfully saved: ${totalSuccess} jobs`);
     console.log(`❌ Errors encountered: ${totalErrors} jobs`);
+    console.log(`❌ Critical error: ${error.message}`);
     console.log("==================================");
+    
+    // Return error result instead of throwing
+    return {
+      success: false,
+      error: error.message,
+      processedCount: totalProcessed,
+      successCount: totalSuccess,
+      errorCount: totalErrors
+    };
+  } finally {
+    // Make sure client is always closed
+    if (client && !client._ending) {
+      await client.end();
+    }
   }
+  
+  // Success case - return after all processing is complete
+  console.log("==================================");
+  console.log(`UNICEF ETL Summary (SUCCESS):`);
+  console.log(`📊 Total processed: ${totalProcessed} jobs`);
+  console.log(`✅ Successfully saved: ${totalSuccess} jobs`);
+  console.log(`❌ Errors encountered: ${totalErrors} jobs`);
+  console.log("==================================");
+  
+  return {
+    success: true,
+    processedCount: totalProcessed,
+    successCount: totalSuccess,
+    errorCount: totalErrors
+  };
 }
 
 module.exports = { fetchAndProcessUnicefJobVacancies };

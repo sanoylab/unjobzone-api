@@ -170,20 +170,36 @@ const runEtl = async () => {
         errorCount: 0
       });
       
-      // Call ETL function directly (they manage their own connections)
-      // The transaction wrapper approach needs refactoring of individual ETL functions
+      // Call ETL function directly (they now return proper status)
       let result = { success: false, error: 'Unknown error' };
       
       try {
-        await func();
-        result = { 
-          success: true, 
-          processedCount: 0, // Individual functions don't return this yet
-          successCount: 0,
-          errorCount: 0
-        };
+        result = await func();
+        
+        // Ensure result has required properties
+        if (!result || typeof result !== 'object') {
+          console.warn(`⚠️ ${name} ETL function returned invalid result format, treating as success`);
+          result = { 
+            success: true, 
+            processedCount: 0,
+            successCount: 0,
+            errorCount: 0
+          };
+        }
+        
+        // Provide defaults for missing properties
+        result.processedCount = result.processedCount || 0;
+        result.successCount = result.successCount || 0;
+        result.errorCount = result.errorCount || 0;
+        
+        if (result.success) {
+          console.log(`✅ ${name} ETL completed: ${result.successCount} jobs saved, ${result.errorCount} errors`);
+        } else {
+          console.error(`❌ ${name} ETL failed: ${result.error}`);
+        }
+        
       } catch (error) {
-        console.error(`❌ ${name} ETL function threw error:`, error.message);
+        console.error(`❌ ${name} ETL function threw unhandled error:`, error.message);
         result = {
           success: false,
           error: error.message,

@@ -546,17 +546,43 @@ const fetchAndProcessUnescoJobVacancies = async () => {
     
   } catch (error) {
     console.error("❌ UNESCO ETL Error:", error);
-    throw error;
-  } finally {
+    
     await client.end();
     
     // Print summary
     console.log("==================================");
-    console.log("UNESCO ETL Summary:");
+    console.log("UNESCO ETL Summary (FAILED):");
     console.log(`✅ Successfully processed: ${jobsSuccessful} jobs`);
     console.log(`❌ Errors encountered: ${jobsErrored} jobs`);
+    console.log(`❌ Critical error: ${error.message}`);
     console.log("==================================");
+    
+    return {
+      success: false,
+      error: error.message,
+      processedCount: jobsSuccessful + jobsErrored,
+      successCount: jobsSuccessful,
+      errorCount: jobsErrored
+    };
+  } finally {
+    if (client && !client._ending) {
+      await client.end();
+    }
   }
+  
+  // Success case
+  console.log("==================================");
+  console.log("UNESCO ETL Summary (SUCCESS):");
+  console.log(`✅ Successfully processed: ${jobsSuccessful} jobs`);
+  console.log(`❌ Errors encountered: ${jobsErrored} jobs`);
+  console.log("==================================");
+  
+  return {
+    success: true,
+    processedCount: jobsSuccessful + jobsErrored,
+    successCount: jobsSuccessful,
+    errorCount: jobsErrored
+  };
 };
 
 module.exports = {
