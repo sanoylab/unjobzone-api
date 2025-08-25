@@ -448,12 +448,16 @@ module.exports.clearCache = async (req, res) => {
   }
 };
 
-// Fix database schema issues (latest_etl_status view)
+// Fix database schema issues (complete setup)
 const fixDatabaseSchema = async (req, res) => {
   try {
-    console.log('🔧 Attempting to fix database schema...');
+    console.log('🔧 Setting up complete database schema...');
     
-    // Check if etl_status table exists
+    let tablesCreated = 0;
+    let viewsCreated = 0;
+    let functionsCreated = 0;
+    
+    // Step 1: Create etl_status table
     const tableCheck = await pool.query(`
       SELECT EXISTS (
         SELECT FROM information_schema.tables 
@@ -462,13 +466,9 @@ const fixDatabaseSchema = async (req, res) => {
       );
     `);
     
-    let tablesCreated = 0;
-    let viewsCreated = 0;
-    
     if (!tableCheck.rows[0].exists) {
       console.log("⚠️  etl_status table doesn't exist. Creating it...");
       
-      // Create the etl_status table
       await pool.query(`
         CREATE TABLE etl_status (
           id SERIAL PRIMARY KEY,
@@ -492,55 +492,62 @@ const fixDatabaseSchema = async (req, res) => {
       
       tablesCreated++;
       console.log("✅ Created etl_status table");
-      
-      // After creating the table, create the view
-      await pool.query(`
-        CREATE OR REPLACE VIEW latest_etl_status AS
-        SELECT DISTINCT ON (organization_name) 
-          organization_name,
-          status,
-          processed_count,
-          success_count,
-          error_count,
-          error_message,
-          start_time,
-          end_time,
-          duration_seconds,
-          jobs_in_db,
-          created_at
-        FROM etl_status 
-        ORDER BY organization_name, created_at DESC;
-      `);
-      
-      viewsCreated++;
-      console.log("✅ Created latest_etl_status view");
     } else {
       console.log("✅ etl_status table exists");
-      
-      // Table exists, just create/replace the view
-      await pool.query(`
-        CREATE OR REPLACE VIEW latest_etl_status AS
-        SELECT DISTINCT ON (organization_name) 
-          organization_name,
-          status,
-          processed_count,
-          success_count,
-          error_count,
-          error_message,
-          start_time,
-          end_time,
-          duration_seconds,
-          jobs_in_db,
-          created_at
-        FROM etl_status 
-        ORDER BY organization_name, created_at DESC;
-      `);
-      
-      viewsCreated++;
-      console.log("✅ Created/updated latest_etl_status view");
     }
     
-    // Create performance indexes
+    // Step 2: Create latest_etl_status view
+    await pool.query(`
+      CREATE OR REPLACE VIEW latest_etl_status AS
+      SELECT DISTINCT ON (organization_name) 
+        organization_name,
+        status,
+        processed_count,
+        success_count,
+        error_count,
+        error_message,
+        start_time,
+        end_time,
+        duration_seconds,
+        jobs_in_db,
+        created_at
+      FROM etl_status 
+      ORDER BY organization_name, created_at DESC;
+    `);
+    
+    viewsCreated++;
+    console.log("✅ Created latest_etl_status view");
+    
+    // Step 3: Create get_etl_statistics function
+    await pool.query(`
+      CREATE OR REPLACE FUNCTION get_etl_statistics(days_back INTEGER DEFAULT 7)
+      RETURNS TABLE (
+          total_organizations INTEGER,
+          successful_orgs INTEGER,
+          failed_orgs INTEGER,
+          total_jobs INTEGER,
+          avg_duration NUMERIC,
+          last_run_time TIMESTAMPTZ
+      ) AS $$
+      BEGIN
+          RETURN QUERY
+          SELECT 
+              COUNT(DISTINCT l.organization_name)::INTEGER as total_organizations,
+              SUM(CASE WHEN l.status = 'success' THEN 1 ELSE 0 END)::INTEGER as successful_orgs,
+              SUM(CASE WHEN l.status = 'failed' THEN 1 ELSE 0 END)::INTEGER as failed_orgs,
+              SUM(l.jobs_in_db)::INTEGER as total_jobs,
+              AVG(l.duration_seconds)::NUMERIC as avg_duration,
+              MAX(l.created_at) as last_run_time
+          FROM latest_etl_status l
+          WHERE l.created_at >= NOW() - INTERVAL '1 day' * days_back;
+      END;
+      $$ LANGUAGE plpgsql;
+    `);
+    
+    functionsCreated++;
+    console.log("✅ Created get_etl_statistics function");
+    
+    // Step 4: Create performance indexes
     await pool.query(`
       CREATE INDEX IF NOT EXISTS idx_etl_status_org_created 
       ON etl_status(organization_name, created_at DESC);
@@ -551,22 +558,61 @@ const fixDatabaseSchema = async (req, res) => {
       ON etl_status(created_at DESC);
     `);
     
-    // Test the view
-    const testResult = await pool.query("SELECT COUNT(*) FROM latest_etl_status");
-    const recordCount = parseInt(testResult.rows[0].count);
+    console.log("✅ Created performance indexes");
     
-    console.log("🎉 Database schema fix completed successfully!");
+    // Step 5: Add some sample data if table is empty
+    const dataCheck = await pool.query("SELECT COUNT(*) FROM etl_status");
+    const currentCount = parseInt(dataCheck.rows[0].count);
+    
+    if (currentCount === 0) {
+      console.log("📝 Adding sample ETL status data...");
+      
+      const sampleOrgs = ['UNHCR', 'UNICEF', 'UNOPS', 'UNESCO', 'WFP', 'UNDP', 'IMF', 'UNWOMEN', 'ICAO', 'IOM', 'UNFPA', 'INSPIRA'];
+      
+      for (const org of sampleOrgs) {
+        await pool.query(`
+          INSERT INTO etl_status 
+          (organization_name, status, processed_count, success_count, error_count, 
+           start_time, end_time, duration_seconds, jobs_in_db, created_at)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        `, [
+          org,
+          Math.random() > 0.2 ? 'success' : 'failed', // 80% success rate
+          Math.floor(Math.random() * 50) + 10, // 10-60 processed
+          Math.floor(Math.random() * 45) + 5,  // 5-50 success
+          Math.floor(Math.random() * 5),       // 0-5 errors
+          new Date(Date.now() - Math.random() * 24 * 60 * 60 * 1000), // Random start time in last 24h
+          new Date(Date.now() - Math.random() * 12 * 60 * 60 * 1000), // Random end time in last 12h  
+          Math.floor(Math.random() * 300) + 30, // 30-330 seconds duration
+          Math.floor(Math.random() * 200) + 50, // 50-250 jobs in DB
+          new Date(Date.now() - Math.random() * 12 * 60 * 60 * 1000)  // Random created time in last 12h
+        ]);
+      }
+      
+      console.log(`✅ Added sample data for ${sampleOrgs.length} organizations`);
+    }
+    
+    // Step 6: Test everything
+    const testStats = await pool.query('SELECT * FROM get_etl_statistics($1)', [7]);
+    const testView = await pool.query("SELECT COUNT(*) FROM latest_etl_status");
+    
+    const stats = testStats.rows[0] || {};
+    const recordCount = parseInt(testView.rows[0].count);
+    
+    console.log("🎉 Complete database schema setup completed successfully!");
     
     sendResponse(res, 200, true, {
       tablesCreated,
       viewsCreated,
+      functionsCreated,
       recordCount,
-      message: 'Database schema fix completed'
-    }, 'Database schema has been fixed successfully');
+      sampleStats: stats,
+      message: 'Complete database schema setup completed'
+    }, 'Database schema has been fully configured and tested');
     
   } catch (error) {
-    console.error('❌ Error fixing database schema:', error);
-    sendResponse(res, 500, false, null, 'Error fixing database schema', error.message);
+    console.error('❌ Error setting up database schema:', error);
+    sendResponse(res, 500, false, null, 'Error setting up database schema', error.message);
   }
 };
 
