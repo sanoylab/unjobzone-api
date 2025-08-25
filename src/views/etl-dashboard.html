@@ -253,6 +253,16 @@
         }
 
         /* Public Mode - Hide Administrative Controls */
+        :root {
+            --admin-display: none; /* Default to hidden for security */
+        }
+        
+        .control-panel,
+        .org-actions,
+        .admin-only {
+            display: var(--admin-display, none) !important;
+        }
+        
         .public-mode .control-panel,
         .public-mode .org-actions,
         .public-mode .admin-only {
@@ -772,18 +782,20 @@
     <script>
         // Public Mode Detection and Configuration
         function initializePublicMode() {
-            // Enable public mode by default for security
-            // To enable admin controls, add ?admin=true to URL or set localStorage
+            // FORCE public mode by default for security - always hide controls
+            // To enable admin controls, add ?admin=secret123 to URL (with secret key)
             const urlParams = new URLSearchParams(window.location.search);
-            const isAdmin = urlParams.get('admin') === 'true' || localStorage.getItem('adminMode') === 'true';
+            const adminKey = urlParams.get('admin');
+            const isAdmin = adminKey === 'secret123'; // Simple secret key for admin access
             
             if (!isAdmin) {
                 document.body.classList.add('public-mode');
                 console.log('🔒 Public mode enabled - Administrative controls hidden');
+                // Also hide via direct style to ensure it works
+                document.documentElement.style.setProperty('--admin-display', 'none');
             } else {
                 console.log('🔓 Admin mode enabled - Full controls available');
-                // Store admin mode preference
-                localStorage.setItem('adminMode', 'true');
+                document.documentElement.style.setProperty('--admin-display', 'block');
             }
         }
 
