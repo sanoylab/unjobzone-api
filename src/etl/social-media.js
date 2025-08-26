@@ -1054,33 +1054,45 @@ const postJobNetworkPostsToFacebook = async (jobNetwork) => {
 
     // Try to get a random image
     const imagePath = getRandomImage();
-    let photoId = null;
-
     if (imagePath) {
-      try {
-        photoId = await uploadImageToFacebook(imagePath);
-        console.log(`📸 Image uploaded to Facebook: ${photoId}`);
-      } catch (imageError) {
-        console.warn('⚠️ Image upload failed, posting without image:', imageError.message);
-      }
+      console.log(`📸 Selected random image for Facebook post: ${path.basename(imagePath)}`);
+    } else {
+      console.log('📝 No image available, creating text-only Facebook post');
     }
 
-    // Post to Facebook
-    const url = `https://graph.facebook.com/v18.0/${process.env.FACEBOOK_PAGE_ID}/feed`;
+    // Post to Facebook with image
+    let response;
     
-    const payload = {
-      message: message,
-      access_token: process.env.FACEBOOK_PAGE_ACCESS_TOKEN,
-      ...(photoId && { object_attachment: photoId })
-    };
+    if (imagePath) {
+      // Post directly with photo using multipart form (includes both image and text)
+      console.log(`📸 Posting to Facebook with image: ${path.basename(imagePath)}`);
+      const formData = new FormData();
+      formData.append('message', message);
+      formData.append('source', fs.createReadStream(imagePath));
+      formData.append('access_token', process.env.FACEBOOK_PAGE_ACCESS_TOKEN);
+      
+      const url = `https://graph.facebook.com/v18.0/${process.env.FACEBOOK_PAGE_ID}/photos`;
+      response = await fetch(url, {
+        method: "POST",
+        body: formData
+      });
+    } else {
+      // Text-only post
+      console.log('📝 Posting text-only to Facebook');
+      const url = `https://graph.facebook.com/v18.0/${process.env.FACEBOOK_PAGE_ID}/feed`;
+      const payload = {
+        message: message,
+        access_token: process.env.FACEBOOK_PAGE_ACCESS_TOKEN
+      };
 
-    const response = await fetch(url, {
-      method: "POST",
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(payload)
-    });
+      response = await fetch(url, {
+        method: "POST",
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+    }
 
     if (!response.ok) {
       const errorData = await response.json();
@@ -1312,33 +1324,45 @@ const postExpiringSoonJobPostsToFacebook = async () => {
 
     // Try to get a random image
     const imagePath = getRandomImage();
-    let photoId = null;
-
     if (imagePath) {
-      try {
-        photoId = await uploadImageToFacebook(imagePath);
-        console.log(`📸 Image uploaded to Facebook: ${photoId}`);
-      } catch (imageError) {
-        console.warn('⚠️ Image upload failed, posting without image:', imageError.message);
-      }
+      console.log(`📸 Selected random image for expiring jobs Facebook post: ${path.basename(imagePath)}`);
+    } else {
+      console.log('📝 No image available, creating text-only Facebook post for expiring jobs');
     }
 
-    // Post to Facebook
-    const url = `https://graph.facebook.com/v18.0/${process.env.FACEBOOK_PAGE_ID}/feed`;
+    // Post to Facebook with image
+    let response;
     
-    const payload = {
-      message: message,
-      access_token: process.env.FACEBOOK_PAGE_ACCESS_TOKEN,
-      ...(photoId && { object_attachment: photoId })
-    };
+    if (imagePath) {
+      // Post directly with photo using multipart form (includes both image and text)
+      console.log(`📸 Posting expiring jobs to Facebook with image: ${path.basename(imagePath)}`);
+      const formData = new FormData();
+      formData.append('message', message);
+      formData.append('source', fs.createReadStream(imagePath));
+      formData.append('access_token', process.env.FACEBOOK_PAGE_ACCESS_TOKEN);
+      
+      const url = `https://graph.facebook.com/v18.0/${process.env.FACEBOOK_PAGE_ID}/photos`;
+      response = await fetch(url, {
+        method: "POST",
+        body: formData
+      });
+    } else {
+      // Text-only post
+      console.log('📝 Posting expiring jobs text-only to Facebook');
+      const url = `https://graph.facebook.com/v18.0/${process.env.FACEBOOK_PAGE_ID}/feed`;
+      const payload = {
+        message: message,
+        access_token: process.env.FACEBOOK_PAGE_ACCESS_TOKEN
+      };
 
-    const response = await fetch(url, {
-      method: "POST",
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(payload)
-    });
+      response = await fetch(url, {
+        method: "POST",
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+    }
 
     if (!response.ok) {
       const errorData = await response.json();
