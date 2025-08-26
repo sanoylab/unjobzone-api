@@ -749,13 +749,32 @@ module.exports.validateLinkedInCredentials = validateLinkedInCredentials;
 // Function to upload image to Facebook and get photo ID
 const uploadImageToFacebook = async (imagePath) => {
   try {
-    // For now, skip image upload due to Facebook API restrictions
-    // Images require additional permissions that might not be available
-    console.log(`📸 Image selected: ${path.basename(imagePath)}`);
-    console.log(`ℹ️ Skipping image upload (Facebook API restrictions) - posting text only`);
-    return null;
+    console.log(`📸 Uploading image to Facebook: ${path.basename(imagePath)}`);
+    
+    // First, upload the image to get a photo ID
+    const formData = new FormData();
+    formData.append('source', fs.createReadStream(imagePath));
+    formData.append('access_token', process.env.FACEBOOK_PAGE_ACCESS_TOKEN);
+    
+    const uploadUrl = `https://graph.facebook.com/v18.0/${process.env.FACEBOOK_PAGE_ID}/photos`;
+    
+    const response = await fetch(uploadUrl, {
+      method: 'POST',
+      body: formData
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error('Facebook image upload error:', errorData);
+      throw new Error(`Facebook image upload failed: ${errorData.error?.message || response.statusText}`);
+    }
+    
+    const result = await response.json();
+    console.log(`✅ Image uploaded successfully: ${result.id}`);
+    return result.id;
+    
   } catch (error) {
-    console.error('Error with image processing:', error);
+    console.error('Error uploading image to Facebook:', error);
     return null;
   }
 };
@@ -893,7 +912,7 @@ const postJobNetworkPostsToFacebook = async (jobNetwork) => {
       return;
     }
 
-    // Create engaging and beautiful Facebook message
+    // Create engaging and varied Facebook message templates
     const formatBeautifulFacebookMessage = (jobs, network) => {
       const networkEmojis = {
         'IT': '💻',
@@ -911,73 +930,122 @@ const postJobNetworkPostsToFacebook = async (jobNetwork) => {
       
       const networkEmoji = networkEmojis[network] || '🌟';
       
-      let message = `${networkEmoji} ✨ EXCITING ${network.toUpperCase()} OPPORTUNITIES ✨ ${networkEmoji}\n\n`;
-      message += `🚀 Transform your career with the United Nations and make a global impact!\n\n`;
-      message += `🔥 FEATURED POSITIONS:\n`;
-      message += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
-      
-      jobs.forEach((job, index) => {
-        const positionEmojis = ['🎯', '⭐', '💡', '🌟', '✨', '🚀', '💫', '⚡'][index] || '📌';
-        
-        // Create beautiful card-like formatting for each job
-        message += `┌─────────────────────────────────────────┐\n`;
-        message += `│ ${positionEmojis} **${job.job_title}** ${positionEmojis}\n`;
-        message += `├─────────────────────────────────────────┤\n`;
-        message += `│ 📍 **Location:** ${job.duty_station || 'Multiple Locations'}\n`;
-        
-        if (job.job_level) {
-          message += `│ 📊 **Level:** ${job.job_level}\n`;
-        }
-        
-        if (job.end_date) {
-          const deadline = new Date(job.end_date).toLocaleDateString('en-US', { 
-            month: 'short', 
-            day: 'numeric', 
-            year: 'numeric' 
+      // Multiple template variations for variety
+      const templates = [
+        // Template 1: Professional & Clean
+        () => {
+          let message = `${networkEmoji} NEW ${network.toUpperCase()} OPPORTUNITIES ${networkEmoji}\n\n`;
+          message += `🌍 Ready to make a global impact? Join the United Nations team!\n\n`;
+          
+          jobs.forEach((job, index) => {
+            const emoji = ['🎯', '⭐', '💡', '🌟', '✨'][index] || '📌';
+            message += `${emoji} ${job.job_title}\n`;
+            message += `📍 ${job.duty_station || 'Multiple Locations'}`;
+            if (job.job_level) message += ` • ${job.job_level}`;
+            if (job.end_date) {
+              const deadline = new Date(job.end_date).toLocaleDateString('en-US', { 
+                month: 'short', day: 'numeric' 
+              });
+              message += ` • Deadline: ${deadline}`;
+            }
+            message += `\n🔗 Apply: unjobzone.com/job/${job.id}\n\n`;
           });
-          message += `│ ⏰ **Deadline:** ${deadline}\n`;
-        }
+          return message;
+        },
         
-        message += `│ 🔗 **Apply:** https://www.unjobzone.com/job/${job.id}\n`;
-        message += `└─────────────────────────────────────────┘\n\n`;
+        // Template 2: Impact-Focused
+        () => {
+          let message = `🚀 CHANGE THE WORLD WITH YOUR CAREER 🚀\n\n`;
+          message += `${networkEmoji} Amazing ${network} opportunities just dropped at the UN!\n\n`;
+          message += `💫 Why these roles matter:\n• Shape global policies\n• Support humanitarian missions\n• Drive sustainable development\n\n`;
+          
+          jobs.forEach((job, index) => {
+            message += `${index + 1}️⃣ ${job.job_title}\n`;
+            message += `   📍 ${job.duty_station || 'Global'}`;
+            if (job.job_level) message += ` | ${job.job_level}`;
+            message += `\n   👆 unjobzone.com/job/${job.id}\n\n`;
+          });
+          return message;
+        },
         
-        // Add spacing between jobs
-        if (index < jobs.length - 1) {
-          message += `          ✦ ✦ ✦ ✦ ✦\n\n`;
+        // Template 3: Urgent & Engaging
+        () => {
+          const urgencyWords = ['BREAKING', 'URGENT', 'HOT', 'FRESH', 'NEW'];
+          const urgency = urgencyWords[Math.floor(Math.random() * urgencyWords.length)];
+          
+          let message = `🔥 ${urgency}: ${network.toUpperCase()} JOBS ALERT! 🔥\n\n`;
+          message += `The UN is hiring NOW! Don't miss these incredible opportunities to:\n`;
+          message += `✅ Work with world leaders\n✅ Travel globally\n✅ Make real impact\n\n`;
+          
+          jobs.forEach((job, index) => {
+            const bullets = ['🔸', '🔹', '🔸', '🔹', '🔸'][index] || '🔸';
+            message += `${bullets} ${job.job_title}\n`;
+            message += `   Location: ${job.duty_station || 'Various'}`;
+            if (job.end_date) {
+              const deadline = new Date(job.end_date).toLocaleDateString('en-US', { 
+                month: 'short', day: 'numeric' 
+              });
+              message += ` | Closes ${deadline}`;
+            }
+            message += `\n   Apply → unjobzone.com/job/${job.id}\n\n`;
+          });
+          return message;
+        },
+        
+        // Template 4: Story-Driven
+        () => {
+          let message = `💭 Imagine working where your decisions impact millions...\n\n`;
+          message += `${networkEmoji} That's reality at the UN! Check out these ${network} roles:\n\n`;
+          
+          jobs.forEach((job, index) => {
+            const stories = [
+              'Transform communities',
+              'Build lasting peace', 
+              'Champion human rights',
+              'Fight global poverty',
+              'Protect our planet'
+            ];
+            const story = stories[index] || 'Create positive change';
+            
+            message += `🌟 ${job.job_title}\n`;
+            message += `💡 ${story} from ${job.duty_station || 'around the world'}`;
+            if (job.job_level) message += ` (${job.job_level})`;
+            message += `\n🎯 Start here: unjobzone.com/job/${job.id}\n\n`;
+          });
+          return message;
         }
-      });
-      
-      message += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
-      message += `🌍 Why Choose UN Careers?\n`;
-      message += `✅ Make a difference globally\n`;
-      message += `✅ Competitive compensation packages\n`;
-      message += `✅ Professional development opportunities\n`;
-      message += `✅ Work with diverse, talented teams\n`;
-      message += `✅ Contribute to sustainable development\n\n`;
-      
-      message += `💼 Ready to join the world's leading humanitarian organization?\n`;
-      message += `👆 Click the links above to apply!\n\n`;
-      
-      message += `🔔 Follow us for daily UN job updates!\n`;
-      message += `📱 Visit: www.unjobzone.com\n\n`;
-      
-      // Enhanced hashtags
-      const hashtags = [
-        '#UNJobs',
-        `#${network.replace(/\s+/g, '')}Jobs`,
-        '#InternationalCareers',
-        '#UnitedNations',
-        '#GlobalImpact',
-        '#HumanitarianWork',
-        '#SustainableDevelopment',
-        '#CareerOpportunity',
-        '#MakeADifference',
-        '#WorldPeace',
-        '#UNJobZone',
-        '#InternationalDevelopment'
       ];
       
-      message += hashtags.join(' ');
+      // Randomly select a template for variety
+      const selectedTemplate = templates[Math.floor(Math.random() * templates.length)];
+      let message = selectedTemplate();
+      
+      // Add call-to-action and social proof
+      const ctas = [
+        '🚀 Ready to change the world? Apply today!',
+        '💫 Your global career starts here!',
+        '🌍 Join thousands making a difference!',
+        '✨ Be part of something bigger!',
+        '🎯 Your impact starts with one application!'
+      ];
+      
+      const selectedCta = ctas[Math.floor(Math.random() * ctas.length)];
+      message += `${selectedCta}\n\n`;
+      
+      message += `📲 Follow @unjobzone for daily opportunities\n`;
+      message += `🌐 More jobs: unjobzone.com\n\n`;
+      
+      // Dynamic hashtags based on content
+      const baseHashtags = ['#UNJobs', '#UnitedNations', '#GlobalCareers', '#UNJobZone'];
+      const networkHashtags = [`#${network.replace(/\s+/g, '')}Jobs`, `#${network}Careers`];
+      const impactHashtags = ['#MakeADifference', '#GlobalImpact', '#HumanitarianWork'];
+      const careerHashtags = ['#InternationalCareers', '#CareerOpportunity', '#DreamJob'];
+      
+      // Randomly mix hashtags for variety
+      const allHashtags = [...baseHashtags, ...networkHashtags, ...impactHashtags, ...careerHashtags];
+      const shuffledHashtags = allHashtags.sort(() => Math.random() - 0.5).slice(0, 10);
+      
+      message += shuffledHashtags.join(' ');
       
       return message;
     };
@@ -1107,54 +1175,104 @@ const postExpiringSoonJobPostsToFacebook = async () => {
       return;
     }
 
-    // Create beautiful and urgent message for expiring jobs
+    // Create beautiful and urgent message for expiring jobs - mobile optimized
     const formatBeautifulExpiringMessage = (jobs) => {
-      let message = `🚨 ⏰ FINAL CALL - OPPORTUNITIES CLOSING SOON! ⏰ 🚨\n\n`;
-      message += `🔥 DON'T MISS OUT! These incredible UN career opportunities are closing their doors VERY SOON!\n\n`;
-      message += `⚡ LAST CHANCE TO APPLY:\n`;
-      message += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+      const urgencyTemplates = [
+        // Template 1: High Urgency
+        () => {
+          let message = `🚨 DEADLINE ALERT! Last chance to apply! 🚨\n\n`;
+          message += `These UN opportunities are closing VERY soon:\n\n`;
+          
+          jobs.forEach((job, index) => {
+            const endDate = new Date(job.end_date);
+            const today = new Date();
+            const isToday = endDate.toDateString() === today.toDateString();
+            const isTomorrow = endDate.toDateString() === new Date(today.getTime() + 24*60*60*1000).toDateString();
+            
+            let urgencyText = '';
+            if (isToday) {
+              urgencyText = '🔥 CLOSES TODAY!';
+            } else if (isTomorrow) {
+              urgencyText = '⚡ CLOSES TOMORROW!';
+            } else {
+              urgencyText = `⏰ Closes ${endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+            }
+            
+            message += `${index + 1}️⃣ ${job.job_title}\n`;
+            message += `📍 ${job.duty_station || 'Global'}`;
+            if (job.job_level) message += ` • ${job.job_level}`;
+            message += `\n${urgencyText}\n`;
+            message += `👆 Apply: unjobzone.com/job/${job.id}\n\n`;
+          });
+          return message;
+        },
+        
+        // Template 2: Countdown Style
+        () => {
+          let message = `⏰ COUNTDOWN: Final hours to apply! ⏰\n\n`;
+          
+          jobs.forEach((job, index) => {
+            const endDate = new Date(job.end_date);
+            const today = new Date();
+            const daysLeft = Math.ceil((endDate - today) / (1000 * 60 * 60 * 24));
+            
+            let countdownEmoji = '';
+            if (daysLeft <= 0) countdownEmoji = '🚨';
+            else if (daysLeft === 1) countdownEmoji = '⚡';
+            else if (daysLeft <= 3) countdownEmoji = '🔥';
+            else countdownEmoji = '⏰';
+            
+            message += `${countdownEmoji} ${job.job_title}\n`;
+            message += `📍 ${job.duty_station || 'Various locations'}`;
+            if (job.job_level) message += ` | ${job.job_level}`;
+            
+            if (daysLeft <= 0) {
+              message += `\n🚨 DEADLINE PASSED - Check if still accepting!\n`;
+            } else if (daysLeft === 1) {
+              message += `\n⚡ LAST DAY TO APPLY!\n`;
+            } else {
+              message += `\n⏰ ${daysLeft} days left\n`;
+            }
+            
+            message += `🔗 unjobzone.com/job/${job.id}\n\n`;
+          });
+          return message;
+        },
+        
+        // Template 3: Opportunity Focus
+        () => {
+          let message = `💫 Don't let these slip away! 💫\n\n`;
+          message += `Amazing UN careers closing soon:\n\n`;
+          
+          jobs.forEach((job, index) => {
+            const motivations = [
+              'Change the world',
+              'Make global impact',
+              'Lead humanitarian efforts',
+              'Shape policy',
+              'Build peace'
+            ];
+            const motivation = motivations[index] || 'Create change';
+            
+            message += `🎯 ${job.job_title}\n`;
+            message += `💡 ${motivation} from ${job.duty_station || 'anywhere'}\n`;
+            
+            const endDate = new Date(job.end_date);
+            const deadline = endDate.toLocaleDateString('en-US', { 
+              month: 'short', 
+              day: 'numeric',
+              year: 'numeric'
+            });
+            message += `⌛ Deadline: ${deadline}\n`;
+            message += `✨ Apply: unjobzone.com/job/${job.id}\n\n`;
+          });
+          return message;
+        }
+      ];
       
-      jobs.forEach((job, index) => {
-        const urgencyEmojis = ['🚨', '⚡', '🔥', '💥', '⏰', '💨', '⚠️', '🔴'][index] || '📌';
-        const endDate = new Date(job.end_date);
-        const today = new Date();
-        const isToday = endDate.toDateString() === today.toDateString();
-        const isTomorrow = endDate.toDateString() === new Date(today.getTime() + 24*60*60*1000).toDateString();
-        
-        let urgencyText = '';
-        let urgencyBorder = '';
-        if (isToday) {
-          urgencyText = '🚨 CLOSES TODAY! 🚨';
-          urgencyBorder = '🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥';
-        } else if (isTomorrow) {
-          urgencyText = '⚡ CLOSES TOMORROW! ⚡';
-          urgencyBorder = '⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡';
-        } else {
-          urgencyText = `⏰ Closes: ${endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
-          urgencyBorder = '⏰⏰⏰⏰⏰⏰⏰⏰⏰⏰⏰⏰⏰⏰⏰⏰⏰⏰⏰⏰⏰';
-        }
-        
-        // Create urgent card-like formatting for expiring jobs
-        message += `${urgencyBorder}\n`;
-        message += `╔═══════════════════════════════════════════╗\n`;
-        message += `║ ${urgencyEmojis} **${job.job_title}** ${urgencyEmojis}\n`;
-        message += `╠═══════════════════════════════════════════╣\n`;
-        message += `║ 📍 **Location:** ${job.duty_station || 'Multiple Locations'}\n`;
-        
-        if (job.job_level) {
-          message += `║ 📊 **Level:** ${job.job_level}\n`;
-        }
-        
-        message += `║ ${urgencyText}\n`;
-        message += `║ 🔗 **APPLY NOW:** https://www.unjobzone.com/job/${job.id}\n`;
-        message += `╚═══════════════════════════════════════════╝\n`;
-        message += `${urgencyBorder}\n\n`;
-        
-        // Add spacing between urgent jobs
-        if (index < jobs.length - 1) {
-          message += `            🔥 💨 🔥 💨 🔥\n\n`;
-        }
-      });
+      // Select random template for variety
+      const selectedTemplate = urgencyTemplates[Math.floor(Math.random() * urgencyTemplates.length)];
+      let message = selectedTemplate();
       
       message += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
       message += `💡 Pro Tip: Application deadlines are FIRM!\n`;
