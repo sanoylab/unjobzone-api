@@ -1063,6 +1063,9 @@ const postJobNetworkPostsToFacebook = async (jobNetwork) => {
     // Post to Facebook with image
     let response;
     
+    // Debug environment variables in production
+    console.log(`🔍 DEBUG - Facebook Page ID: "${process.env.FACEBOOK_PAGE_ID}" (type: ${typeof process.env.FACEBOOK_PAGE_ID}, length: ${process.env.FACEBOOK_PAGE_ID ? process.env.FACEBOOK_PAGE_ID.length : 'N/A'})`);
+    
     if (imagePath) {
       // Post directly with photo using multipart form (includes both image and text)
       console.log(`📸 Posting to Facebook with image: ${path.basename(imagePath)}`);
@@ -1072,6 +1075,7 @@ const postJobNetworkPostsToFacebook = async (jobNetwork) => {
       formData.append('access_token', process.env.FACEBOOK_PAGE_ACCESS_TOKEN);
       
       const url = `https://graph.facebook.com/v18.0/${process.env.FACEBOOK_PAGE_ID}/photos`;
+      console.log(`🔍 DEBUG - Constructed URL: ${url}`);
       response = await fetch(url, {
         method: "POST",
         body: formData
@@ -1333,6 +1337,9 @@ const postExpiringSoonJobPostsToFacebook = async () => {
     // Post to Facebook with image
     let response;
     
+    // Debug environment variables in production
+    console.log(`🔍 DEBUG (Expiring) - Facebook Page ID: "${process.env.FACEBOOK_PAGE_ID}" (type: ${typeof process.env.FACEBOOK_PAGE_ID}, length: ${process.env.FACEBOOK_PAGE_ID ? process.env.FACEBOOK_PAGE_ID.length : 'N/A'})`);
+    
     if (imagePath) {
       // Post directly with photo using multipart form (includes both image and text)
       console.log(`📸 Posting expiring jobs to Facebook with image: ${path.basename(imagePath)}`);
@@ -1342,6 +1349,7 @@ const postExpiringSoonJobPostsToFacebook = async () => {
       formData.append('access_token', process.env.FACEBOOK_PAGE_ACCESS_TOKEN);
       
       const url = `https://graph.facebook.com/v18.0/${process.env.FACEBOOK_PAGE_ID}/photos`;
+      console.log(`🔍 DEBUG (Expiring) - Constructed URL: ${url}`);
       response = await fetch(url, {
         method: "POST",
         body: formData
