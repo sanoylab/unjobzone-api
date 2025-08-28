@@ -1066,37 +1066,29 @@ const postJobNetworkPostsToFacebook = async (jobNetwork) => {
     // Debug environment variables in production
     console.log(`🔍 DEBUG - Facebook Page ID: "${process.env.FACEBOOK_PAGE_ID}" (type: ${typeof process.env.FACEBOOK_PAGE_ID}, length: ${process.env.FACEBOOK_PAGE_ID ? process.env.FACEBOOK_PAGE_ID.length : 'N/A'})`);
     
+    // Use feed endpoint for all posts (photos endpoint has technical issues)
+    console.log(`📝 Posting to Facebook feed${imagePath ? ' (with image note)' : ''}`);
+    const url = `https://graph.facebook.com/v18.0/${process.env.FACEBOOK_PAGE_ID}/feed`;
+    
+    // If we have an image, mention it in the message
+    let finalMessage = message;
     if (imagePath) {
-      // Post directly with photo using multipart form (includes both image and text)
-      console.log(`📸 Posting to Facebook with image: ${path.basename(imagePath)}`);
-      const formData = new FormData();
-      formData.append('message', message);
-      formData.append('source', fs.createReadStream(imagePath));
-      formData.append('access_token', process.env.FACEBOOK_PAGE_ACCESS_TOKEN);
-      
-      const url = `https://graph.facebook.com/v18.0/${process.env.FACEBOOK_PAGE_ID}/photos`;
-      console.log(`🔍 DEBUG - Constructed URL: ${url}`);
-      response = await fetch(url, {
-        method: "POST",
-        body: formData
-      });
-    } else {
-      // Text-only post
-      console.log('📝 Posting text-only to Facebook');
-      const url = `https://graph.facebook.com/v18.0/${process.env.FACEBOOK_PAGE_ID}/feed`;
-      const payload = {
-        message: message,
-        access_token: process.env.FACEBOOK_PAGE_ACCESS_TOKEN
-      };
-
-      response = await fetch(url, {
-        method: "POST",
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(payload)
-      });
+      finalMessage += `\n\n📸 Image: ${path.basename(imagePath)}`;
+      console.log(`📸 Including image reference: ${path.basename(imagePath)}`);
     }
+    
+    const payload = {
+      message: finalMessage,
+      access_token: process.env.FACEBOOK_PAGE_ACCESS_TOKEN
+    };
+
+    response = await fetch(url, {
+      method: "POST",
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    });
 
     if (!response.ok) {
       const errorData = await response.json();
@@ -1340,37 +1332,29 @@ const postExpiringSoonJobPostsToFacebook = async () => {
     // Debug environment variables in production
     console.log(`🔍 DEBUG (Expiring) - Facebook Page ID: "${process.env.FACEBOOK_PAGE_ID}" (type: ${typeof process.env.FACEBOOK_PAGE_ID}, length: ${process.env.FACEBOOK_PAGE_ID ? process.env.FACEBOOK_PAGE_ID.length : 'N/A'})`);
     
+    // Use feed endpoint for all posts (photos endpoint has technical issues)
+    console.log(`📝 Posting expiring jobs to Facebook feed${imagePath ? ' (with image note)' : ''}`);
+    const url = `https://graph.facebook.com/v18.0/${process.env.FACEBOOK_PAGE_ID}/feed`;
+    
+    // If we have an image, mention it in the message
+    let finalMessage = message;
     if (imagePath) {
-      // Post directly with photo using multipart form (includes both image and text)
-      console.log(`📸 Posting expiring jobs to Facebook with image: ${path.basename(imagePath)}`);
-      const formData = new FormData();
-      formData.append('message', message);
-      formData.append('source', fs.createReadStream(imagePath));
-      formData.append('access_token', process.env.FACEBOOK_PAGE_ACCESS_TOKEN);
-      
-      const url = `https://graph.facebook.com/v18.0/${process.env.FACEBOOK_PAGE_ID}/photos`;
-      console.log(`🔍 DEBUG (Expiring) - Constructed URL: ${url}`);
-      response = await fetch(url, {
-        method: "POST",
-        body: formData
-      });
-    } else {
-      // Text-only post
-      console.log('📝 Posting expiring jobs text-only to Facebook');
-      const url = `https://graph.facebook.com/v18.0/${process.env.FACEBOOK_PAGE_ID}/feed`;
-      const payload = {
-        message: message,
-        access_token: process.env.FACEBOOK_PAGE_ACCESS_TOKEN
-      };
-
-      response = await fetch(url, {
-        method: "POST",
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(payload)
-      });
+      finalMessage += `\n\n📸 Image: ${path.basename(imagePath)}`;
+      console.log(`📸 Including image reference: ${path.basename(imagePath)}`);
     }
+    
+    const payload = {
+      message: finalMessage,
+      access_token: process.env.FACEBOOK_PAGE_ACCESS_TOKEN
+    };
+
+    response = await fetch(url, {
+      method: "POST",
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    });
 
     if (!response.ok) {
       const errorData = await response.json();
