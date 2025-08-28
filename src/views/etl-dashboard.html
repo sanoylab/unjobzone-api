@@ -690,7 +690,7 @@
             <h1>UN Job Zone ETL Monitor</h1>
             <p>Real-time monitoring and control of job data processing across UN organizations</p>
             <div class="status-badge">
-                <div class="status-dot"></div>
+                    <div class="status-dot"></div>
                 <span>System Operational</span>
                 <span id="lastUpdated">•</span>
             </div>
@@ -699,33 +699,33 @@
         <!-- Quick Stats -->
         <section class="quick-stats">
             <div class="stat-card">
-                <div class="stat-icon">
-                    <i class="fas fa-building"></i>
-                </div>
+                    <div class="stat-icon">
+                        <i class="fas fa-building"></i>
+                    </div>
                 <div class="stat-number" id="totalOrgs">0</div>
                 <div class="stat-label">Organizations</div>
             </div>
             <div class="stat-card">
-                <div class="stat-icon">
-                    <i class="fas fa-check-circle"></i>
-                </div>
+                    <div class="stat-icon">
+                        <i class="fas fa-check-circle"></i>
+                    </div>
                 <div class="stat-number" id="successfulOrgs">0</div>
                 <div class="stat-label">Successful</div>
             </div>
             <div class="stat-card">
-                <div class="stat-icon">
-                    <i class="fas fa-clock"></i>
-                </div>
+                    <div class="stat-icon">
+                        <i class="fas fa-clock"></i>
+                    </div>
                 <div class="stat-number" id="runningOrgs">0</div>
                 <div class="stat-label">Running</div>
             </div>
             <div class="stat-card">
-                <div class="stat-icon">
-                    <i class="fas fa-briefcase"></i>
-                </div>
+                    <div class="stat-icon">
+                        <i class="fas fa-briefcase"></i>
+                    </div>
                 <div class="stat-number" id="totalJobs">0</div>
                 <div class="stat-label">Jobs Processed</div>
-            </div>
+                </div>
         </section>
 
         <!-- Control Panel -->
@@ -733,10 +733,10 @@
             <div class="control-header">
                 <h2 class="control-title">System Controls</h2>
                 <button class="btn btn-secondary" onclick="refreshDashboard()">
-                    <i class="fas fa-sync-alt"></i>
-                    Refresh
-                </button>
-            </div>
+                        <i class="fas fa-sync-alt"></i>
+                        Refresh
+                    </button>
+                </div>
             <div class="control-actions">
                 <button class="btn btn-success" onclick="runAllETL()">
                     <i class="fas fa-play"></i>
@@ -754,7 +754,7 @@
                     <i class="fas fa-stop"></i>
                     Emergency Stop
                 </button>
-            </div>
+                        </div>
         </section>
 
         <!-- Organizations Grid -->
@@ -762,7 +762,7 @@
             <div class="loading">
                 <div class="spinner"></div>
                 Loading organizations...
-            </div>
+                </div>
         </section>
 
         <!-- Recent Activity -->
@@ -774,8 +774,8 @@
                 <div class="loading">
                     <div class="spinner"></div>
                     Loading activity...
+                    </div>
                 </div>
-            </div>
         </section>
     </div>
 
@@ -809,8 +809,8 @@
         // Initialize dashboard
         document.addEventListener('DOMContentLoaded', function() {
             console.log('🚀 ETL Monitor initialized');
-            loadDashboard();
-            startAutoRefresh();
+                loadDashboard();
+                startAutoRefresh();
         });
 
         // Auto-refresh every 5 seconds for real-time feel
@@ -933,14 +933,14 @@
                     <div class="progress-bar">
                         <div class="progress-fill ${progress > 0 ? '' : 'indeterminate'}" 
                              style="width: ${Math.max(progress, 15)}%"></div>
-                    </div>
+                            </div>
                     <div class="progress-text">
                         <span class="progress-step">${step}</span>
                         <span class="progress-eta">
                             ${progress > 0 ? progress + '% • ' : ''}${elapsed}${eta ? ' • ' + eta + ' left' : ''}
                         </span>
-                    </div>
-                </div>
+                        </div>
+                            </div>
             `;
         }
 
@@ -951,8 +951,8 @@
                     <div class="error-message">
                         <i class="fas fa-exclamation-triangle"></i>
                         ${org.errorMessage}
-                    </div>
-                </div>
+                            </div>
+                            </div>
             `;
         }
 
@@ -972,7 +972,7 @@
                             <i class="fas fa-file-alt"></i>
                             Logs
                         </button>
-                    </div>
+                            </div>
                 `;
             } else if (canRun) {
                 return `
@@ -990,9 +990,9 @@
                             <i class="fas fa-times"></i>
                             Clear
                         </button>
-                        ` : ''}
-                    </div>
-                `;
+                            ` : ''}
+                        </div>
+                    `;
             }
             
             return '';
@@ -1003,10 +1003,10 @@
             const container = document.getElementById('recentActivity');
             
             const recentActivities = organizations
-                .filter(org => org.lastRun !== 'Never')
+                    .filter(org => org.lastRun !== 'Never')
                 .sort((a, b) => new Date(b.startTime || b.endTime || 0) - new Date(a.startTime || a.endTime || 0))
-                .slice(0, 8);
-
+                    .slice(0, 8);
+                
             if (recentActivities.length === 0) {
                 container.innerHTML = '<div class="loading">No recent activity</div>';
                 return;
@@ -1022,20 +1022,20 @@
                               org.status === 'failed' ? 'var(--error-red)' : 'var(--gray-500)';
                 
                 const icon = getStatusIcon(org.status);
-                
-                return `
-                    <div class="activity-item">
-                        <div class="activity-icon" style="background: ${iconBg};">
+                        
+                        return `
+                            <div class="activity-item">
+                                <div class="activity-icon" style="background: ${iconBg};">
                             <i class="fas fa-${icon}"></i>
-                        </div>
-                        <div class="activity-content">
+                                </div>
+                                <div class="activity-content">
                             <div class="activity-org">${org.name}</div>
                             <div class="activity-description">${actionText}</div>
-                        </div>
-                        <div class="activity-time">${org.lastRun}</div>
-                    </div>
-                `;
-            }).join('');
+                                </div>
+                                <div class="activity-time">${org.lastRun}</div>
+                            </div>
+                        `;
+                    }).join('');
         }
 
         // Utility functions
@@ -1241,4 +1241,4 @@
         });
     </script>
 </body>
-</html>
+</html> 
