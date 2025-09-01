@@ -1067,44 +1067,58 @@ const postJobNetworkPostsToFacebook = async (jobNetwork) => {
     console.log(`🔍 DEBUG - Facebook Page ID: "${process.env.FACEBOOK_PAGE_ID}" (type: ${typeof process.env.FACEBOOK_PAGE_ID}, length: ${process.env.FACEBOOK_PAGE_ID ? process.env.FACEBOOK_PAGE_ID.length : 'N/A'})`);
     
     if (imagePath) {
-      // Try photos endpoint with external URL method
-      console.log(`📸 Posting to Facebook with image: ${path.basename(imagePath)}`);
-      
-      // Use photos endpoint with external image URL (fallback approach)
-      const imageUrls = [
-        'https://images.unsplash.com/photo-1521737604893-d14cc237f11d?w=800&h=600&fit=crop&crop=center',
-        'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=800&h=600&fit=crop&crop=center',
-        'https://images.unsplash.com/photo-1560472354-b33ff0c44a43?w=800&h=600&fit=crop&crop=center',
-        'https://images.unsplash.com/photo-1553028826-f4804a6dba3b?w=800&h=600&fit=crop&crop=center',
-        'https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e?w=800&h=600&fit=crop&crop=center'
-      ];
-      
-      const randomImageUrl = imageUrls[Math.floor(Math.random() * imageUrls.length)];
+      // Post with actual local image from post_images folder
+      console.log(`📸 Posting to Facebook with local image: ${path.basename(imagePath)}`);
       
       try {
-        // Try photos endpoint with external URL
-        const photosUrl = `https://graph.facebook.com/v18.0/${process.env.FACEBOOK_PAGE_ID}/photos`;
-        const photosPayload = {
-          message: message,
-          url: randomImageUrl,
-          access_token: process.env.FACEBOOK_PAGE_ACCESS_TOKEN
-        };
-
-        response = await fetch(photosUrl, {
-          method: "POST",
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(photosPayload)
+        // Method 1: Try FormData upload with local file
+        const formData = new FormData();
+        formData.append('message', message);
+        formData.append('source', fs.createReadStream(imagePath), {
+          filename: path.basename(imagePath),
+          contentType: 'image/jpeg'
         });
         
-        // If photos endpoint fails, fallback to feed with link
+        const photosUrl = `https://graph.facebook.com/v18.0/${process.env.FACEBOOK_PAGE_ID}/photos?access_token=${process.env.FACEBOOK_PAGE_ACCESS_TOKEN}`;
+        
+        response = await fetch(photosUrl, {
+          method: "POST",
+          body: formData,
+          headers: {
+            ...formData.getHeaders()
+          }
+        });
+        
+        // If FormData method fails, try base64 method
         if (!response.ok) {
-          console.log('📝 Photos endpoint failed, using feed with link preview');
+          console.log('📝 FormData method failed, trying base64 upload...');
+          
+          // Method 2: Base64 upload
+          const imageBuffer = fs.readFileSync(imagePath);
+          const base64Image = imageBuffer.toString('base64');
+          const mimeType = path.extname(imagePath).toLowerCase() === '.png' ? 'image/png' : 'image/jpeg';
+          
+          const base64Payload = {
+            message: message,
+            url: `data:${mimeType};base64,${base64Image}`,
+            access_token: process.env.FACEBOOK_PAGE_ACCESS_TOKEN
+          };
+
+          response = await fetch(photosUrl, {
+            method: "POST",
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(base64Payload)
+          });
+        }
+        
+        // If both image methods fail, use feed endpoint with image note
+        if (!response.ok) {
+          console.log('📝 Image upload failed, using feed with image reference...');
           const feedUrl = `https://graph.facebook.com/v18.0/${process.env.FACEBOOK_PAGE_ID}/feed`;
           const feedPayload = {
-            message: `${message}\n\n🖼️ View image: ${randomImageUrl}`,
-            link: randomImageUrl,
+            message: `${message}\n\n📸 Photo: ${path.basename(imagePath)}`,
             access_token: process.env.FACEBOOK_PAGE_ACCESS_TOKEN
           };
 
@@ -1116,8 +1130,9 @@ const postJobNetworkPostsToFacebook = async (jobNetwork) => {
             body: JSON.stringify(feedPayload)
           });
         }
+        
       } catch (error) {
-        console.log('📝 External image failed, using text-only post');
+        console.log('📝 All image methods failed, using text-only post');
         // Ultimate fallback - text only
         const url = `https://graph.facebook.com/v18.0/${process.env.FACEBOOK_PAGE_ID}/feed`;
         const payload = {
@@ -1394,44 +1409,58 @@ const postExpiringSoonJobPostsToFacebook = async () => {
     console.log(`🔍 DEBUG (Expiring) - Facebook Page ID: "${process.env.FACEBOOK_PAGE_ID}" (type: ${typeof process.env.FACEBOOK_PAGE_ID}, length: ${process.env.FACEBOOK_PAGE_ID ? process.env.FACEBOOK_PAGE_ID.length : 'N/A'})`);
     
     if (imagePath) {
-      // Try photos endpoint with external URL method
-      console.log(`📸 Posting expiring jobs to Facebook with image: ${path.basename(imagePath)}`);
-      
-      // Use photos endpoint with external image URL (fallback approach)
-      const imageUrls = [
-        'https://images.unsplash.com/photo-1611224923853-80b023f02d71?w=800&h=600&fit=crop&crop=center',
-        'https://images.unsplash.com/photo-1590736969955-71cc94901144?w=800&h=600&fit=crop&crop=center',
-        'https://images.unsplash.com/photo-1542744173-8e7e53415bb0?w=800&h=600&fit=crop&crop=center',
-        'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800&h=600&fit=crop&crop=center',
-        'https://images.unsplash.com/photo-1521791136064-7986c2920216?w=800&h=600&fit=crop&crop=center'
-      ];
-      
-      const randomImageUrl = imageUrls[Math.floor(Math.random() * imageUrls.length)];
+      // Post with actual local image from post_images folder
+      console.log(`📸 Posting expiring jobs to Facebook with local image: ${path.basename(imagePath)}`);
       
       try {
-        // Try photos endpoint with external URL
-        const photosUrl = `https://graph.facebook.com/v18.0/${process.env.FACEBOOK_PAGE_ID}/photos`;
-        const photosPayload = {
-          message: message,
-          url: randomImageUrl,
-          access_token: process.env.FACEBOOK_PAGE_ACCESS_TOKEN
-        };
-
-        response = await fetch(photosUrl, {
-          method: "POST",
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(photosPayload)
+        // Method 1: Try FormData upload with local file
+        const formData = new FormData();
+        formData.append('message', message);
+        formData.append('source', fs.createReadStream(imagePath), {
+          filename: path.basename(imagePath),
+          contentType: 'image/jpeg'
         });
         
-        // If photos endpoint fails, fallback to feed with link
+        const photosUrl = `https://graph.facebook.com/v18.0/${process.env.FACEBOOK_PAGE_ID}/photos?access_token=${process.env.FACEBOOK_PAGE_ACCESS_TOKEN}`;
+        
+        response = await fetch(photosUrl, {
+          method: "POST",
+          body: formData,
+          headers: {
+            ...formData.getHeaders()
+          }
+        });
+        
+        // If FormData method fails, try base64 method
         if (!response.ok) {
-          console.log('📝 Photos endpoint failed, using feed with link preview');
+          console.log('📝 FormData method failed, trying base64 upload...');
+          
+          // Method 2: Base64 upload
+          const imageBuffer = fs.readFileSync(imagePath);
+          const base64Image = imageBuffer.toString('base64');
+          const mimeType = path.extname(imagePath).toLowerCase() === '.png' ? 'image/png' : 'image/jpeg';
+          
+          const base64Payload = {
+            message: message,
+            url: `data:${mimeType};base64,${base64Image}`,
+            access_token: process.env.FACEBOOK_PAGE_ACCESS_TOKEN
+          };
+
+          response = await fetch(photosUrl, {
+            method: "POST",
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(base64Payload)
+          });
+        }
+        
+        // If both image methods fail, use feed endpoint with image note
+        if (!response.ok) {
+          console.log('📝 Image upload failed, using feed with image reference...');
           const feedUrl = `https://graph.facebook.com/v18.0/${process.env.FACEBOOK_PAGE_ID}/feed`;
           const feedPayload = {
-            message: `${message}\n\n🖼️ View image: ${randomImageUrl}`,
-            link: randomImageUrl,
+            message: `${message}\n\n📸 Photo: ${path.basename(imagePath)}`,
             access_token: process.env.FACEBOOK_PAGE_ACCESS_TOKEN
           };
 
@@ -1443,8 +1472,9 @@ const postExpiringSoonJobPostsToFacebook = async () => {
             body: JSON.stringify(feedPayload)
           });
         }
+        
       } catch (error) {
-        console.log('📝 External image failed, using text-only post');
+        console.log('📝 All image methods failed, using text-only post');
         // Ultimate fallback - text only
         const url = `https://graph.facebook.com/v18.0/${process.env.FACEBOOK_PAGE_ID}/feed`;
         const payload = {
