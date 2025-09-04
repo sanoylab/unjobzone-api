@@ -412,30 +412,75 @@ const logETLStatus = async (organizationName, status, stats = {}) => {
     
     console.log(`📊 Logging ETL status for ${organizationName}: ${status}${stats.currentStep ? ` - ${stats.currentStep}` : ''}`);
     
-    // Insert or update status with enhanced tracking
-    const query = `
-      INSERT INTO etl_status 
-      (organization_name, status, processed_count, success_count, error_count, error_message, 
-       start_time, end_time, duration_seconds, jobs_in_db, current_step, progress_percent, estimated_remaining_seconds)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-      RETURNING id;
+    // Check if there's an existing 'running' record for this organization
+    const checkQuery = `
+      SELECT id FROM etl_status 
+      WHERE organization_name = $1 
+        AND status = 'running' 
+        AND start_time > NOW() - INTERVAL '4 hours'
+      ORDER BY start_time DESC 
+      LIMIT 1;
     `;
     
-    const result = await client.query(query, [
-      organizationName,
-      status,
-      stats.processedCount || 0,
-      stats.successCount || 0,
-      stats.errorCount || 0,
-      stats.errorMessage || null,
-      stats.startTime || null,
-      stats.endTime || null,
-      stats.durationSeconds || null,
-      stats.jobsInDb || 0,
-      stats.currentStep || null,
-      stats.progressPercent || 0,
-      stats.estimatedRemainingSeconds || null
-    ]);
+    const checkResult = await client.query(checkQuery, [organizationName]);
+    
+    let result;
+    
+    if (checkResult.rows.length > 0 && (status === 'success' || status === 'failed')) {
+      // Update existing 'running' record to completion status
+      const updateQuery = `
+        UPDATE etl_status 
+        SET status = $1, processed_count = $2, success_count = $3, error_count = $4, 
+            error_message = $5, end_time = $6, duration_seconds = $7, jobs_in_db = $8,
+            current_step = $9, progress_percent = $10, estimated_remaining_seconds = $11
+        WHERE id = $12
+        RETURNING id;
+      `;
+      
+      result = await client.query(updateQuery, [
+        status,
+        stats.processedCount || 0,
+        stats.successCount || 0,
+        stats.errorCount || 0,
+        stats.errorMessage || null,
+        stats.endTime || null,
+        stats.durationSeconds || null,
+        stats.jobsInDb || 0,
+        stats.currentStep || null,
+        status === 'success' ? 100 : (stats.progressPercent || 0),
+        stats.estimatedRemainingSeconds || null,
+        checkResult.rows[0].id
+      ]);
+      
+      console.log(`📝 Updated existing ETL record for ${organizationName}: ${status}`);
+    } else {
+      // Insert new record for 'running' or when no existing record found
+      const insertQuery = `
+        INSERT INTO etl_status 
+        (organization_name, status, processed_count, success_count, error_count, error_message, 
+         start_time, end_time, duration_seconds, jobs_in_db, current_step, progress_percent, estimated_remaining_seconds)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        RETURNING id;
+      `;
+      
+      result = await client.query(insertQuery, [
+        organizationName,
+        status,
+        stats.processedCount || 0,
+        stats.successCount || 0,
+        stats.errorCount || 0,
+        stats.errorMessage || null,
+        stats.startTime || null,
+        stats.endTime || null,
+        stats.durationSeconds || null,
+        stats.jobsInDb || 0,
+        stats.currentStep || null,
+        stats.progressPercent || 0,
+        stats.estimatedRemainingSeconds || null
+      ]);
+      
+      console.log(`📝 Created new ETL record for ${organizationName}: ${status}`);
+    }
     
     return result.rows[0].id;
     
@@ -490,6 +535,48 @@ const updateETLProgress = async (organizationName, progressPercent, currentStep,
   } catch (error) {
     console.error(`Error updating ETL progress for ${organizationName}:`, error);
     return null;
+  } finally {
+    await client.end();
+  }
+};
+
+// Force cleanup ALL running statuses (use with caution - for debugging stuck ETL locks)
+const forceCleanupAllRunningStatuses = async () => {
+  const { Client } = require('pg');
+  const { credentials } = require("./db");
+  
+  const client = new Client(credentials);
+  
+  try {
+    await client.connect();
+    
+    // Force cleanup ALL running statuses
+    const forceQuery = `
+      UPDATE etl_status 
+      SET 
+        status = 'failed',
+        end_time = NOW(),
+        error_message = 'Force-cancelled to resolve ETL lock conflict',
+        duration_seconds = EXTRACT(EPOCH FROM (NOW() - start_time))::INTEGER
+      WHERE 
+        status = 'running'
+      RETURNING organization_name, start_time;
+    `;
+    
+    const result = await client.query(forceQuery);
+    
+    if (result.rows.length > 0) {
+      console.log(`🧹 Force-cleaned ${result.rows.length} running statuses:`);
+      result.rows.forEach(row => {
+        console.log(`   - ${row.organization_name} (started: ${row.start_time})`);
+      });
+    }
+    
+    return result.rows.length;
+    
+  } catch (error) {
+    console.error("Error force-cleaning running statuses:", error);
+    return 0;
   } finally {
     await client.end();
   }
@@ -614,9 +701,39 @@ const acquireETLLock = async (organizationName) => {
 
 // Release ETL lock (this happens automatically when status changes from 'running')
 const releaseETLLock = async (organizationName) => {
-  console.log(`🔓 ETL lock released for ${organizationName}`);
-  // Lock is automatically released when status changes from 'running' to 'success' or 'failed'
-  return true;
+  const { Client } = require('pg');
+  const { credentials } = require("./db");
+  
+  const client = new Client(credentials);
+  
+  try {
+    await client.connect();
+    
+    // Double-check: ensure any remaining 'running' status is cleaned up
+    const cleanupQuery = `
+      UPDATE etl_status 
+      SET status = 'failed', end_time = NOW(), current_step = 'Force-cancelled after completion'
+      WHERE organization_name = $1 
+        AND status = 'running' 
+        AND start_time > NOW() - INTERVAL '4 hours'
+      RETURNING id;
+    `;
+    
+    const result = await client.query(cleanupQuery, [organizationName]);
+    
+    if (result.rows.length > 0) {
+      console.log(`🧹 Cleaned up ${result.rows.length} remaining 'running' status for ${organizationName}`);
+    }
+    
+    console.log(`🔓 ETL lock released for ${organizationName}`);
+    return true;
+    
+  } catch (error) {
+    console.error(`Error releasing ETL lock for ${organizationName}:`, error);
+    return false;
+  } finally {
+    await client.end();
+  }
 };
 
 // Get current job count for organization
@@ -1250,6 +1367,7 @@ module.exports = {
   cleanupExpiredAndDuplicateJobs,
   getJobsExpiringSoon,
   cleanupStaleRunningStatuses,
+  forceCleanupAllRunningStatuses,
   acquireETLLock,
   releaseETLLock,
 };
