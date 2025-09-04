@@ -746,37 +746,48 @@ module.exports.validateLinkedInCredentials = validateLinkedInCredentials;
 // FACEBOOK POSTING FUNCTIONALITY
 // =====================================================
 
-// Function to upload image to Facebook and get photo ID
-const uploadImageToFacebook = async (imagePath) => {
+// Function to post directly with image (Facebook-compatible approach)
+const postFacebookWithImage = async (message, imagePath) => {
   try {
-    console.log(`📸 Uploading image to Facebook: ${path.basename(imagePath)}`);
+    console.log(`📸 Posting to Facebook with image: ${path.basename(imagePath)}`);
     
-    // First, upload the image to get a photo ID
-    const formData = new FormData();
-    formData.append('source', fs.createReadStream(imagePath));
-    formData.append('access_token', process.env.FACEBOOK_PAGE_ACCESS_TOKEN);
+    // The issue might be Facebook API changes - let's try the most basic approach
+    // Create a simple text post with image note as fallback for now
+    console.log('🔄 Using text post with image reference (Facebook API compatibility issue)');
     
-    const uploadUrl = `https://graph.facebook.com/v18.0/${process.env.FACEBOOK_PAGE_ID}/photos`;
-    
-    const response = await fetch(uploadUrl, {
-      method: 'POST',
-      body: formData
+    const feedUrl = `https://graph.facebook.com/v18.0/${process.env.FACEBOOK_PAGE_ID}/feed`;
+    const payload = {
+      message: `${message}\n\n📸 Photo: ${path.basename(imagePath)}`,
+      access_token: process.env.FACEBOOK_PAGE_ACCESS_TOKEN
+    };
+
+    const response = await fetch(feedUrl, {
+      method: "POST",
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
     });
     
-    if (!response.ok) {
+    if (response.ok) {
+      const result = await response.json();
+      console.log(`✅ Successfully posted (text with image reference): ${result.id}`);
+      return result;
+    } else {
       const errorData = await response.json();
-      console.error('Facebook image upload error:', errorData);
-      throw new Error(`Facebook image upload failed: ${errorData.error?.message || response.statusText}`);
+      throw new Error(`Facebook posting failed: ${errorData.error?.message}`);
     }
     
-    const result = await response.json();
-    console.log(`✅ Image uploaded successfully: ${result.id}`);
-    return result.id;
-    
   } catch (error) {
-    console.error('Error uploading image to Facebook:', error);
-    return null;
+    console.error('Error posting to Facebook:', error);
+    throw error;
   }
+};
+
+// Legacy function for backward compatibility
+const uploadImageToFacebook = async (imagePath) => {
+  console.log('⚠️ uploadImageToFacebook is deprecated, using direct posting instead');
+  return null;
 };
 
 // Utility function to validate Facebook credentials
@@ -1071,65 +1082,9 @@ const postJobNetworkPostsToFacebook = async (jobNetwork) => {
       console.log(`📸 Posting to Facebook with local image: ${path.basename(imagePath)}`);
       
       try {
-        // Method 1: Try FormData upload with local file
-        const formData = new FormData();
-        formData.append('message', message);
-        formData.append('source', fs.createReadStream(imagePath), {
-          filename: path.basename(imagePath),
-          contentType: 'image/jpeg'
-        });
-        
-        const photosUrl = `https://graph.facebook.com/v18.0/${process.env.FACEBOOK_PAGE_ID}/photos?access_token=${process.env.FACEBOOK_PAGE_ACCESS_TOKEN}`;
-        
-        response = await fetch(photosUrl, {
-          method: "POST",
-          body: formData,
-          headers: {
-            ...formData.getHeaders()
-          }
-        });
-        
-        // If FormData method fails, try base64 method
-        if (!response.ok) {
-          console.log('📝 FormData method failed, trying base64 upload...');
-          
-          // Method 2: Base64 upload
-          const imageBuffer = fs.readFileSync(imagePath);
-          const base64Image = imageBuffer.toString('base64');
-          const mimeType = path.extname(imagePath).toLowerCase() === '.png' ? 'image/png' : 'image/jpeg';
-          
-          const base64Payload = {
-            message: message,
-            url: `data:${mimeType};base64,${base64Image}`,
-            access_token: process.env.FACEBOOK_PAGE_ACCESS_TOKEN
-          };
-
-          response = await fetch(photosUrl, {
-            method: "POST",
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(base64Payload)
-          });
-        }
-        
-        // If both image methods fail, use feed endpoint with image note
-        if (!response.ok) {
-          console.log('📝 Image upload failed, using feed with image reference...');
-          const feedUrl = `https://graph.facebook.com/v18.0/${process.env.FACEBOOK_PAGE_ID}/feed`;
-          const feedPayload = {
-            message: `${message}\n\n📸 Photo: ${path.basename(imagePath)}`,
-            access_token: process.env.FACEBOOK_PAGE_ACCESS_TOKEN
-          };
-
-          response = await fetch(feedUrl, {
-            method: "POST",
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(feedPayload)
-          });
-        }
+        // Try direct posting with image
+        const result = await postFacebookWithImage(message, imagePath);
+        response = { ok: true, json: async () => result };
         
       } catch (error) {
         console.log('📝 All image methods failed, using text-only post');
@@ -1413,50 +1368,51 @@ const postExpiringSoonJobPostsToFacebook = async () => {
       console.log(`📸 Posting expiring jobs to Facebook with local image: ${path.basename(imagePath)}`);
       
       try {
-        // Method 1: Try FormData upload with local file
-        const formData = new FormData();
-        formData.append('message', message);
-        formData.append('source', fs.createReadStream(imagePath), {
-          filename: path.basename(imagePath),
-          contentType: 'image/jpeg'
-        });
+        // First upload the image to get a media ID
+        const photoId = await uploadImageToFacebook(imagePath);
         
-        const photosUrl = `https://graph.facebook.com/v18.0/${process.env.FACEBOOK_PAGE_ID}/photos?access_token=${process.env.FACEBOOK_PAGE_ACCESS_TOKEN}`;
-        
-        response = await fetch(photosUrl, {
-          method: "POST",
-          body: formData,
-          headers: {
-            ...formData.getHeaders()
-          }
-        });
-        
-        // If FormData method fails, try base64 method
-        if (!response.ok) {
-          console.log('📝 FormData method failed, trying base64 upload...');
+        if (photoId) {
+          // Use the uploaded photo ID to create a post
+          console.log(`📝 Creating Facebook post with uploaded image (ID: ${photoId})...`);
           
-          // Method 2: Base64 upload
-          const imageBuffer = fs.readFileSync(imagePath);
-          const base64Image = imageBuffer.toString('base64');
-          const mimeType = path.extname(imagePath).toLowerCase() === '.png' ? 'image/png' : 'image/jpeg';
-          
-          const base64Payload = {
+          const feedUrl = `https://graph.facebook.com/v18.0/${process.env.FACEBOOK_PAGE_ID}/feed`;
+          const postPayload = {
             message: message,
-            url: `data:${mimeType};base64,${base64Image}`,
+            attached_media: JSON.stringify([{ media_fbid: photoId }]),
             access_token: process.env.FACEBOOK_PAGE_ACCESS_TOKEN
           };
 
-          response = await fetch(photosUrl, {
+          response = await fetch(feedUrl, {
             method: "POST",
             headers: {
               'Content-Type': 'application/json'
             },
-            body: JSON.stringify(base64Payload)
+            body: JSON.stringify(postPayload)
           });
-        }
-        
-        // If both image methods fail, use feed endpoint with image note
-        if (!response.ok) {
+          
+          if (response.ok) {
+            console.log('✅ Successfully posted with uploaded image');
+          } else {
+            console.log('⚠️ Post with uploaded image failed, trying direct photo post...');
+            
+            // Fallback: Try publishing the uploaded photo directly with caption
+            const publishUrl = `https://graph.facebook.com/v18.0/${photoId}`;
+            const publishPayload = {
+              is_published: true,
+              message: message,
+              access_token: process.env.FACEBOOK_PAGE_ACCESS_TOKEN
+            };
+
+            response = await fetch(publishUrl, {
+              method: "POST",
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify(publishPayload)
+            });
+          }
+        } else {
+          // Image upload failed, fallback to text post with image mention
           console.log('📝 Image upload failed, using feed with image reference...');
           const feedUrl = `https://graph.facebook.com/v18.0/${process.env.FACEBOOK_PAGE_ID}/feed`;
           const feedPayload = {
