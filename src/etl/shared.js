@@ -1348,6 +1348,44 @@ const executeETLWithProgressTracking = async (organizationName, etlFunction) => 
   }
 };
 
+// Puppeteer configuration for Docker-friendly browser launching
+const getPuppeteerConfig = () => {
+  const config = {
+    headless: true,
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-blink-features=AutomationControlled',
+      '--disable-background-timer-throttling',
+      '--disable-backgrounding-occluded-windows',
+      '--disable-renderer-backgrounding',
+      '--disable-features=TranslateUI',
+      '--disable-ipc-flooding-protection',
+      '--disable-dev-shm-usage',
+      '--disable-gpu',
+      '--disable-extensions',
+      '--disable-default-apps',
+      '--disable-sync',
+      '--no-first-run',
+      '--no-default-browser-check',
+      '--window-size=1920,1080'
+    ]
+  };
+
+  // If running in Docker, try to use the installed Chrome
+  if (process.env.DOCKER_ENV || process.env.NODE_ENV === 'production') {
+    try {
+      // Try to use system Chrome first (installed via apt)
+      config.executablePath = '/usr/bin/google-chrome-stable';
+    } catch (error) {
+      console.log('⚠️ System Chrome not found, falling back to bundled Chromium');
+      // Puppeteer will use its bundled Chromium
+    }
+  }
+
+  return config;
+};
+
 module.exports = {
   getOrganizationId,
   removeDuplicateJobVacancies,
@@ -1370,4 +1408,5 @@ module.exports = {
   forceCleanupAllRunningStatuses,
   acquireETLLock,
   releaseETLLock,
+  getPuppeteerConfig,
 };

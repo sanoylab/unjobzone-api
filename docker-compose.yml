@@ -1,0 +1,46 @@
+version: '3.8'
+
+services:
+  unjobzone-etl:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - DOCKER_ENV=true
+      # Add your other environment variables here
+      # - DATABASE_URL=your_database_url
+      # - FACEBOOK_PAGE_ID=your_facebook_page_id
+      # - FACEBOOK_PAGE_ACCESS_TOKEN=your_facebook_token
+      # - LINKEDIN_ACCESS_TOKEN=your_linkedin_token
+      # - etc.
+    env_file:
+      - .env  # Load environment variables from .env file
+    volumes:
+      # Mount .env file if it exists
+      - ./.env:/app/.env:ro
+    restart: unless-stopped
+    # Add shared memory size for Puppeteer
+    shm_size: 1gb
+    # Security options
+    security_opt:
+      - seccomp:unconfined
+    # Memory limit to prevent Chrome from consuming too much memory
+    mem_limit: 2g
+    # Additional environment for debugging
+    command: ["npm", "start"]
+    
+  # Optional: Add a database service if needed
+  # postgres:
+  #   image: postgres:15
+  #   environment:
+  #     POSTGRES_DB: unjobzone
+  #     POSTGRES_USER: postgres
+  #     POSTGRES_PASSWORD: your_password
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+  #   ports:
+  #     - "5432:5432"
+
+# volumes:
+#   postgres_data:

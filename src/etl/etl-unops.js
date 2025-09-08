@@ -2,7 +2,7 @@ require("dotenv").config();
 
 const { Client } = require('pg');
 const { credentials } = require("./db");
-const { getOrganizationId, upsertJobVacancy, validateJobData } = require("./shared");
+const { getOrganizationId, upsertJobVacancy, validateJobData, getPuppeteerConfig } = require("./shared");
 const cheerio = require('cheerio');
 const puppeteer = require('puppeteer');
 
@@ -39,15 +39,8 @@ const scrapeJobListings = async () => {
   
   let browser = null;
   try {
-    // Launch Puppeteer with minimal configuration
-    browser = await puppeteer.launch({
-      headless: true,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-blink-features=AutomationControlled'
-      ]
-    });
+    // Launch Puppeteer with Docker-friendly configuration
+    browser = await puppeteer.launch(getPuppeteerConfig());
     
     const page = await browser.newPage();
     
@@ -259,14 +252,7 @@ const scrapeJobDetail = async (jobUrl, basicInfo = {}) => {
     await delay(1000); // 1 second delay to be respectful
     
     // Launch Puppeteer for individual job page
-    browser = await puppeteer.launch({
-      headless: true,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-blink-features=AutomationControlled'
-      ]
-    });
+    browser = await puppeteer.launch(getPuppeteerConfig());
     
     const page = await browser.newPage();
     await page.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36');
