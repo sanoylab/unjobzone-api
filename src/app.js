@@ -1,4 +1,7 @@
-// Import Sentry instrumentation FIRST - before any other imports
+// Load environment variables FIRST - before any other imports
+require("dotenv").config();
+
+// Import Sentry instrumentation AFTER dotenv
 require("./instrument.js");
 
 const express = require("express");
@@ -30,11 +33,6 @@ const {
   postJobNetworkPostsToLinkedIn, 
   refreshLinkedInToken 
 } = require("./etl/social-media");
-
-//const { generateJobRelatedBlogPost } = require("./util/etl-blog");
-const { generateJobRelatedBlogPost } = require("./etl/etl-blog-deepseek");
-
-require("dotenv").config();
 
 const PORT = process.env.PORT;
 
