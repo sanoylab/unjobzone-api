@@ -34,6 +34,9 @@ const {
   refreshLinkedInToken 
 } = require("./etl/social-media");
 
+// Import Job Monitor for Oracle HCM jobs
+const JobMonitor = require("./job-monitor");
+
 const PORT = process.env.PORT;
 
 const errors = require("./error-middleware");
@@ -97,9 +100,25 @@ Sentry.setupExpressErrorHandler(app);
 app.use(errors.notFound);
 app.use(errors.errorHandler);
 
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`API Server is started on PORT: ${PORT}`);
   runEtl();
+  
+  // Initialize Oracle HCM Job Monitor if email credentials are provided
+  if (process.env.MONITOR_EMAIL_USER && process.env.MONITOR_EMAIL_PASS) {
+    try {
+      console.log('🔍 Initializing Oracle HCM Job Monitor...');
+      const jobMonitor = new JobMonitor();
+      await jobMonitor.initialize();
+      jobMonitor.startMonitoring();
+      console.log('✅ Oracle HCM Job Monitor started successfully');
+    } catch (error) {
+      console.error('❌ Failed to start Oracle HCM Job Monitor:', error.message);
+    }
+  } else {
+    console.log('ℹ️  Oracle HCM Job Monitor disabled - missing email credentials');
+    console.log('   Add MONITOR_EMAIL_USER and MONITOR_EMAIL_PASS to .env to enable');
+  }
 });
 
 const runEtl = async () => {
