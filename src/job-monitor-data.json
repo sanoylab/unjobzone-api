@@ -1,0 +1,19 @@
+{
+  "lastCheckData": {
+    "jobs": [],
+    "pageHash": "0",
+    "pageText": "",
+    "timestamp": "2025-11-25T14:12:31.847Z",
+    "totalJobs": 0
+  },
+  "dailyChanges": [
+    {
+      "timestamp": "2025-11-25T14:12:31.848Z",
+      "changes": [
+        "Initial scan found 0 job postings"
+      ],
+      "isFirstRun": true
+    }
+  ],
+  "lastSaved": "2025-11-25T14:12:31.848Z"
+}

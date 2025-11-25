@@ -1,4 +1,4 @@
-// Job Monitor Service for Oracle HCM Job Postings
+// Job Monitor Service for ICAO Job Postings
 // Monitors https://estm.fa.em2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_3001/jobs
 // Sends email notifications for updates, morning summaries, and evening summaries
 
@@ -30,7 +30,7 @@ class JobMonitor {
     // Initialize transporter
     this.transporter = nodemailer.createTransport(this.emailConfig);
     
-    console.log('🔍 Job Monitor initialized for Oracle HCM jobs');
+    console.log('🔍 Job Monitor initialized for ICAO jobs');
   }
 
   /**
@@ -64,11 +64,11 @@ class JobMonitor {
   }
 
   /**
-   * Fetch and parse job data from Oracle HCM site
+   * Fetch and parse job data from ICAO site
    */
   async fetchJobData() {
     try {
-      console.log('🌐 Fetching job data from Oracle HCM...');
+      console.log('🌐 Fetching job data from ICAO...');
       
       const response = await axios.get(this.targetUrl, {
         timeout: 30000,
@@ -244,7 +244,7 @@ class JobMonitor {
         <head>${baseStyles}</head>
         <body>
           <div class="header">
-            <h1>🚨 Job Alert: Oracle HCM Update Detected!</h1>
+            <h1>🚨 Job Alert: ICAO Update Detected!</h1>
             <p>Changes detected on the job postings page</p>
           </div>
           <div class="content">
@@ -271,10 +271,10 @@ class JobMonitor {
               ${data.currentData.jobs.length > 10 ? `<p><em>... and ${data.currentData.jobs.length - 10} more jobs</em></p>` : ''}
             ` : ''}
             
-            <p><strong>🔗 <a href="${this.targetUrl}" style="color: #667eea;">View All Jobs on Oracle HCM</a></strong></p>
+            <p><strong>🔗 <a href="${this.targetUrl}" style="color: #667eea;">View All Jobs on ICAO</a></strong></p>
           </div>
           <div class="footer">
-            <p>Oracle HCM Job Monitor | <span class="timestamp">${new Date().toLocaleString()}</span></p>
+            <p>ICAO Job Monitor | <span class="timestamp">${new Date().toLocaleString()}</span></p>
           </div>
         </body>
         </html>
@@ -288,7 +288,7 @@ class JobMonitor {
         <head>${baseStyles}</head>
         <body>
           <div class="header">
-            <h1>🌅 Good Morning! Oracle HCM Job Update</h1>
+            <h1>🌅 Good Morning! ICAO Job Update</h1>
             <p>Your daily morning job monitoring report</p>
           </div>
           <div class="content">
@@ -316,10 +316,10 @@ class JobMonitor {
               ${data.jobs.length > 5 ? `<p><em>... and ${data.jobs.length - 5} more jobs</em></p>` : ''}
             ` : '<p>No specific job details available.</p>'}
             
-            <p><strong>🔗 <a href="${this.targetUrl}" style="color: #667eea;">View All Jobs on Oracle HCM</a></strong></p>
+            <p><strong>🔗 <a href="${this.targetUrl}" style="color: #667eea;">View All Jobs on ICAO</a></strong></p>
           </div>
           <div class="footer">
-            <p>Oracle HCM Job Monitor | <span class="timestamp">${new Date().toLocaleString()}</span></p>
+            <p>ICAO Job Monitor | <span class="timestamp">${new Date().toLocaleString()}</span></p>
             <p>Next update check in 10 minutes</p>
           </div>
         </body>
@@ -334,7 +334,7 @@ class JobMonitor {
         <head>${baseStyles}</head>
         <body>
           <div class="header">
-            <h1>🌆 Evening Summary: Oracle HCM Jobs</h1>
+            <h1>🌆 Evening Summary: ICAO Jobs</h1>
             <p>Your daily evening job monitoring summary</p>
           </div>
           <div class="content">
@@ -367,10 +367,10 @@ class JobMonitor {
               ${data.jobs.length > 8 ? `<p><em>... and ${data.jobs.length - 8} more jobs</em></p>` : ''}
             ` : '<p>No specific job details available.</p>'}
             
-            <p><strong>🔗 <a href="${this.targetUrl}" style="color: #667eea;">View All Jobs on Oracle HCM</a></strong></p>
+            <p><strong>🔗 <a href="${this.targetUrl}" style="color: #667eea;">View All Jobs on ICAO</a></strong></p>
           </div>
           <div class="footer">
-            <p>Oracle HCM Job Monitor | <span class="timestamp">${new Date().toLocaleString()}</span></p>
+            <p>ICAO Job Monitor | <span class="timestamp">${new Date().toLocaleString()}</span></p>
             <p>Monitoring will continue overnight. Next morning summary at 8:00 AM</p>
           </div>
         </body>
@@ -441,13 +441,13 @@ class JobMonitor {
         .filter(entry => new Date(entry.timestamp) >= yesterday)
         .flatMap(entry => entry.changes);
       
-      const subject = `🌅 Morning Update: Oracle HCM Jobs (${currentData.totalJobs} postings)`;
+      const subject = `🌅 Morning Update: ICAO Jobs (${currentData.totalJobs} postings)`;
       const htmlContent = this.generateEmailHTML('morning', {
         totalJobs: currentData.totalJobs,
         jobs: currentData.jobs,
         yesterdayChanges
       });
-      const textContent = `Good Morning!\n\nOracle HCM Job Summary:\n- Total Jobs: ${currentData.totalJobs}\n- Changes since yesterday: ${yesterdayChanges.length}\n\nView jobs: ${this.targetUrl}`;
+      const textContent = `Good Morning!\n\nICAO Job Summary:\n- Total Jobs: ${currentData.totalJobs}\n- Changes since yesterday: ${yesterdayChanges.length}\n\nView jobs: ${this.targetUrl}`;
       
       await this.sendEmail(subject, htmlContent, textContent);
       
@@ -476,14 +476,14 @@ class JobMonitor {
         .filter(entry => new Date(entry.timestamp) >= today)
         .flatMap(entry => entry.changes);
       
-      const subject = `🌆 Evening Summary: Oracle HCM Jobs (${todayChanges.length} changes today)`;
+      const subject = `🌆 Evening Summary: ICAO Jobs (${todayChanges.length} changes today)`;
       const htmlContent = this.generateEmailHTML('evening', {
         totalJobs: currentData.totalJobs,
         jobs: currentData.jobs,
         todayChanges,
         totalChangesToday: todayChanges.length
       });
-      const textContent = `Evening Summary!\n\nOracle HCM Job Summary:\n- Total Jobs: ${currentData.totalJobs}\n- Changes today: ${todayChanges.length}\n\nView jobs: ${this.targetUrl}`;
+      const textContent = `Evening Summary!\n\nICAO Job Summary:\n- Total Jobs: ${currentData.totalJobs}\n- Changes today: ${todayChanges.length}\n\nView jobs: ${this.targetUrl}`;
       
       await this.sendEmail(subject, htmlContent, textContent);
       
@@ -503,7 +503,7 @@ class JobMonitor {
    * Start the monitoring service with cron jobs
    */
   startMonitoring() {
-    console.log('🚀 Starting Oracle HCM job monitoring service...');
+    console.log('🚀 Starting ICAO job monitoring service...');
     
     // Check for updates every 10 minutes
     cron.schedule('*/10 * * * *', () => {
