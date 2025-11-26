@@ -8,6 +8,7 @@ const nodemailer = require('nodemailer');
 const cron = require('node-cron');
 const fs = require('fs').promises;
 const path = require('path');
+const puppeteer = require('puppeteer');
 
 class JobMonitor {
   constructor() {
@@ -64,70 +65,174 @@ class JobMonitor {
   }
 
   /**
-   * Fetch and parse job data from ICAO site
+   * Fetch and parse job data from ICAO site using Puppeteer for JavaScript rendering
    */
   async fetchJobData() {
+    let browser = null;
+    
     try {
-      console.log('🌐 Fetching job data from ICAO...');
+      console.log('🌐 Fetching job data from ICAO (with JavaScript rendering)...');
       
-      const response = await axios.get(this.targetUrl, {
-        timeout: 30000,
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-        }
+      // Launch Puppeteer browser
+      browser = await puppeteer.launch({
+        headless: true,
+        args: [
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-dev-shm-usage',
+          '--disable-accelerated-2d-canvas',
+          '--no-first-run',
+          '--no-zygote',
+          '--disable-gpu'
+        ]
       });
-
-      const $ = cheerio.load(response.data);
       
-      // Extract job information - this may need adjustment based on actual site structure
+      const page = await browser.newPage();
+      
+      // Set user agent and viewport
+      await page.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
+      await page.setViewport({ width: 1366, height: 768 });
+      
+      // Navigate to the page
+      console.log('📄 Loading page...');
+      await page.goto(this.targetUrl, { 
+        waitUntil: 'networkidle2',
+        timeout: 60000 
+      });
+      
+      // Wait for content to load - ICAO takes time to render
+      console.log('⏳ Waiting for job content to load...');
+      
+      // Wait for potential job containers or loading indicators to disappear
+      try {
+        // Wait for either job results or "no jobs" message
+        await page.waitForSelector([
+          '[data-bind*="job"]',
+          '.job-results',
+          '.search-results',
+          '.no-results',
+          '.job-list',
+          '.results-container',
+          '.job-item',
+          '.posting',
+          '.opportunity'
+        ].join(','), { timeout: 30000 });
+      } catch (waitError) {
+        console.log('⚠️  No specific job selectors found, continuing with page content...');
+      }
+      
+      // Additional wait to ensure dynamic content is fully loaded
+      await new Promise(resolve => setTimeout(resolve, 5000));
+      
+      // Get page content after JavaScript execution
+      const content = await page.content();
+      const $ = cheerio.load(content);
+      
+      // Extract job information with improved selectors for ICAO
       const jobs = [];
       
-      // Look for common job listing patterns
-      const jobElements = $('[data-automation-id*="job"], .job-item, .job-listing, .vacancy, .position').each((index, element) => {
-        const $job = $(element);
+      // ICAO specific selectors (based on typical Oracle HCM patterns)
+      const oracleSelectors = [
+        '[data-bind*="job"]',
+        '[class*="job"]',
+        '[id*="job"]',
+        '.search-result',
+        '.result-item',
+        '.posting',
+        '.opportunity',
+        '.requisition',
+        'article',
+        '.card',
+        '.list-item',
+        '[role="listitem"]'
+      ];
+      
+      let foundJobs = false;
+      
+      for (const selector of oracleSelectors) {
+        const elements = $(selector);
         
-        const title = $job.find('h1, h2, h3, .title, [data-automation-id*="title"]').first().text().trim();
-        const location = $job.find('.location, [data-automation-id*="location"]').first().text().trim();
-        const department = $job.find('.department, [data-automation-id*="department"]').first().text().trim();
-        const jobId = $job.find('[data-automation-id*="id"], .job-id').first().text().trim();
-        
-        if (title) {
-          jobs.push({
-            title,
-            location,
-            department,
-            jobId,
-            element: $job.html()
+        if (elements.length > 0) {
+          console.log(`📋 Found ${elements.length} elements with selector: ${selector}`);
+          
+          elements.each((index, element) => {
+            const $job = $(element);
+            const text = $job.text().trim();
+            
+            // Skip if element is too small or doesn't contain job-like content
+            if (text.length < 20) return;
+            
+            // Look for job-related keywords to validate this is actually a job posting
+            const jobKeywords = ['position', 'job', 'career', 'vacancy', 'apply', 'requisition', 'posting'];
+            const hasJobKeywords = jobKeywords.some(keyword => 
+              text.toLowerCase().includes(keyword)
+            );
+            
+            if (!hasJobKeywords) return;
+            
+            // Extract job details with flexible selectors
+            const title = $job.find('h1, h2, h3, h4, .title, [class*="title"], [class*="job-title"], a').first().text().trim() || 
+                         text.split('\n')[0].trim();
+            
+            const location = $job.find('.location, [class*="location"], [class*="city"]').first().text().trim();
+            const department = $job.find('.department, [class*="department"], [class*="org"]').first().text().trim();
+            const jobId = $job.find('[class*="id"], [class*="req"], [data-job-id]').first().text().trim();
+            
+            if (title && title.length > 3) {
+              jobs.push({
+                title: title.substring(0, 200), // Limit title length
+                location: location.substring(0, 100),
+                department: department.substring(0, 100),
+                jobId: jobId.substring(0, 50),
+                element: text.substring(0, 500), // Store sample text instead of HTML
+                selector: selector
+              });
+              foundJobs = true;
+            }
           });
+          
+          if (foundJobs) break; // Stop after finding jobs with first successful selector
         }
-      });
-
-      // If no specific job elements found, try to extract general page content
-      if (jobs.length === 0) {
-        const pageText = $('body').text().replace(/\s+/g, ' ').trim();
-        const pageHash = this.generateHash(pageText);
-        
-        return {
-          jobs: [],
-          pageHash,
-          pageText: pageText.substring(0, 1000), // First 1000 chars for comparison
-          timestamp: new Date().toISOString(),
-          totalJobs: 0
-        };
       }
-
-      const pageHash = this.generateHash(JSON.stringify(jobs));
+      
+      // If no structured jobs found, analyze page text for changes
+      let pageText = $('body').text().replace(/\s+/g, ' ').trim();
+      
+      // Remove common dynamic elements that change frequently but aren't job-related
+      pageText = pageText
+        .replace(/\d{1,2}:\d{2}:\d{2}/g, '') // Remove timestamps
+        .replace(/\d{1,2}\/\d{1,2}\/\d{4}/g, '') // Remove dates
+        .replace(/loading|please wait|fetching/gi, '') // Remove loading text
+        .replace(/\s+/g, ' ') // Normalize whitespace
+        .trim();
+      
+      const pageHash = this.generateHash(pageText);
+      
+      console.log(`✅ Page analysis complete: ${jobs.length} jobs found, content length: ${pageText.length}`);
+      
+      if (jobs.length > 0) {
+        console.log('📋 Sample jobs found:');
+        jobs.slice(0, 3).forEach((job, i) => {
+          console.log(`   ${i + 1}. ${job.title} ${job.location ? `(${job.location})` : ''}`);
+        });
+      }
       
       return {
         jobs,
         pageHash,
+        pageText: pageText.substring(0, 2000), // Store more text for comparison
         timestamp: new Date().toISOString(),
-        totalJobs: jobs.length
+        totalJobs: jobs.length,
+        method: 'puppeteer'
       };
 
     } catch (error) {
       console.error('❌ Error fetching job data:', error.message);
       throw error;
+    } finally {
+      if (browser) {
+        await browser.close();
+      }
     }
   }
 
@@ -403,7 +508,7 @@ class JobMonitor {
         
         // Send update email (unless it's the first run)
         if (!changeDetection.isFirstRun) {
-          const subject = `🚨 New Job Posted in ICAO - ${changeDetection.changes.length} Change(s) Detected`;
+          const subject = `🚨 ICAO Job Update - ${changeDetection.changes.length} Change(s) Detected`;
           const htmlContent = this.generateEmailHTML('update', {
             changes: changeDetection.changes,
             currentData

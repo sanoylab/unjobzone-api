@@ -1,10 +1,10 @@
-# Oracle HCM Job Monitor Setup Guide
+# ICAO Job Monitor Setup Guide
 
 ## Overview
-The Oracle HCM Job Monitor is a service that monitors the Oracle job postings page for updates and sends email notifications. It checks for changes every 10 minutes and sends daily summary emails.
+The ICAO Job Monitor is a service that monitors the ICAO job postings page for updates and sends email notifications. It checks for changes every 10 minutes and sends daily summary emails.
 
 ## Features
-- ✅ Monitors Oracle HCM job postings every 10 minutes
+- ✅ Monitors ICAO job postings every 10 minutes
 - ✅ Sends instant email alerts when changes are detected
 - ✅ Morning summary email at 8:00 AM
 - ✅ Evening summary email at 6:00 PM
@@ -27,7 +27,7 @@ The Oracle HCM Job Monitor is a service that monitors the Oracle job postings pa
 Add these variables to your `.env` file:
 
 ```bash
-# Oracle HCM Job Monitor Configuration
+# ICAO Job Monitor Configuration
 MONITOR_EMAIL_USER=your-gmail@gmail.com
 MONITOR_EMAIL_PASS=your-16-character-app-password
 MONITOR_RECIPIENT_EMAIL=recipient@example.com  # Optional, defaults to MONITOR_EMAIL_USER

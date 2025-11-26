@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 
-// Standalone Oracle HCM Job Monitor
+// Standalone ICAO Job Monitor
 // This script can be run independently or integrated into the main application
 
 require('dotenv').config();
 const JobMonitor = require('./src/job-monitor');
 
 async function main() {
-  console.log('🔍 Oracle HCM Job Monitor Starting...');
+  console.log('🔍 ICAO Job Monitor Starting...');
   console.log('📧 Target URL:', 'https://estm.fa.em2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_3001/jobs');
   
   // Validate environment variables

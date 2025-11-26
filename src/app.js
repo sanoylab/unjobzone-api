@@ -34,7 +34,7 @@ const {
   refreshLinkedInToken 
 } = require("./etl/social-media");
 
-// Import Job Monitor for Oracle HCM jobs
+// Import Job Monitor for ICAO jobs
 const JobMonitor = require("./job-monitor");
 
 const PORT = process.env.PORT;
@@ -104,19 +104,19 @@ app.listen(PORT, async () => {
   console.log(`API Server is started on PORT: ${PORT}`);
   runEtl();
   
-  // Initialize Oracle HCM Job Monitor if email credentials are provided
+  // Initialize ICAO Job Monitor if email credentials are provided
   if (process.env.MONITOR_EMAIL_USER && process.env.MONITOR_EMAIL_PASS) {
     try {
-      console.log('🔍 Initializing Oracle HCM Job Monitor...');
+      console.log('🔍 Initializing ICAO Job Monitor...');
       const jobMonitor = new JobMonitor();
       await jobMonitor.initialize();
       jobMonitor.startMonitoring();
-      console.log('✅ Oracle HCM Job Monitor started successfully');
+      console.log('✅ ICAO Job Monitor started successfully');
     } catch (error) {
-      console.error('❌ Failed to start Oracle HCM Job Monitor:', error.message);
+      console.error('❌ Failed to start ICAO Job Monitor:', error.message);
     }
   } else {
-    console.log('ℹ️  Oracle HCM Job Monitor disabled - missing email credentials');
+    console.log('ℹ️  ICAO Job Monitor disabled - missing email credentials');
     console.log('   Add MONITOR_EMAIL_USER and MONITOR_EMAIL_PASS to .env to enable');
   }
 });

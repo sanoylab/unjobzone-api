@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 
-// Test script for Oracle HCM Job Monitor email functionality
+// Test script for ICAO Job Monitor email functionality
 // This script sends a test email to verify the configuration
 
 require('dotenv').config();
 const JobMonitor = require('./src/job-monitor');
 
 async function testEmailConfiguration() {
-  console.log('🧪 Testing Oracle HCM Job Monitor Email Configuration...\n');
+  console.log('🧪 Testing ICAO Job Monitor Email Configuration...\n');
   
   // Check environment variables
   if (!process.env.MONITOR_EMAIL_USER || !process.env.MONITOR_EMAIL_PASS) {
@@ -29,7 +29,7 @@ async function testEmailConfiguration() {
     // Test email sending
     console.log('\n📤 Sending test email...');
     
-    const testSubject = '🧪 Oracle HCM Job Monitor - Test Email';
+    const testSubject = '🧪 ICAO Job Monitor - Test Email';
     const testHtmlContent = `
       <!DOCTYPE html>
       <html>
@@ -45,7 +45,7 @@ async function testEmailConfiguration() {
       <body>
         <div class="header">
           <h1>🧪 Test Email Successful!</h1>
-          <p>Oracle HCM Job Monitor Configuration Test</p>
+          <p>ICAO Job Monitor Configuration Test</p>
         </div>
         <div class="content">
           <div class="success">
@@ -69,17 +69,17 @@ async function testEmailConfiguration() {
           </ul>
           
           <p><strong>🔗 Monitored URL:</strong><br>
-          <a href="https://estm.fa.em2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_3001/jobs" style="color: #667eea;">Oracle HCM Job Postings</a></p>
+          <a href="https://estm.fa.em2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_3001/jobs" style="color: #667eea;">ICAO Job Postings</a></p>
         </div>
         <div class="footer">
-          <p>Oracle HCM Job Monitor | Configuration Test</p>
+          <p>ICAO Job Monitor | Configuration Test</p>
         </div>
       </body>
       </html>
     `;
     
     const testTextContent = `
-Oracle HCM Job Monitor - Test Email
+ICAO Job Monitor - Test Email
 
 ✅ Email configuration is working correctly!
 
@@ -103,7 +103,7 @@ Monitored URL: https://estm.fa.em2.oraclecloud.com/hcmUI/CandidateExperience/en/
     if (emailSent) {
       console.log('✅ Test email sent successfully!');
       console.log('📬 Check your inbox for the test email');
-      console.log('\n🚀 Your Oracle HCM Job Monitor is ready to use!');
+      console.log('\n🚀 Your ICAO Job Monitor is ready to use!');
       console.log('\nTo start monitoring:');
       console.log('  npm run job-monitor    # Run standalone monitor');
       console.log('  npm start              # Run with main app');
