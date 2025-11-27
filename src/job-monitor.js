@@ -68,12 +68,25 @@ class JobMonitor {
    * Fetch and parse job data from ICAO site using Puppeteer for JavaScript rendering
    */
   async fetchJobData() {
+    // Try Puppeteer first, fallback to axios if it fails
+    try {
+      return await this.fetchJobDataWithPuppeteer();
+    } catch (puppeteerError) {
+      console.warn('⚠️  Puppeteer failed, falling back to basic HTTP scraping:', puppeteerError.message);
+      return await this.fetchJobDataWithAxios();
+    }
+  }
+
+  /**
+   * Fetch job data using Puppeteer (preferred method for JavaScript-heavy sites)
+   */
+  async fetchJobDataWithPuppeteer() {
     let browser = null;
     
     try {
       console.log('🌐 Fetching job data from ICAO (with JavaScript rendering)...');
       
-      // Launch Puppeteer browser
+      // Launch Puppeteer browser with robust configuration for deployment
       browser = await puppeteer.launch({
         headless: true,
         args: [
@@ -83,8 +96,17 @@ class JobMonitor {
           '--disable-accelerated-2d-canvas',
           '--no-first-run',
           '--no-zygote',
-          '--disable-gpu'
-        ]
+          '--disable-gpu',
+          '--disable-background-timer-throttling',
+          '--disable-backgrounding-occluded-windows',
+          '--disable-renderer-backgrounding',
+          '--disable-features=TranslateUI',
+          '--disable-ipc-flooding-protection',
+          '--disable-web-security',
+          '--disable-features=VizDisplayCompositor'
+        ],
+        // Try to use system Chrome if available, otherwise use bundled Chromium
+        executablePath: process.env.CHROME_BIN || undefined
       });
       
       const page = await browser.newPage();
@@ -227,12 +249,59 @@ class JobMonitor {
       };
 
     } catch (error) {
-      console.error('❌ Error fetching job data:', error.message);
+      console.error('❌ Error fetching job data with Puppeteer:', error.message);
       throw error;
     } finally {
       if (browser) {
         await browser.close();
       }
+    }
+  }
+
+  /**
+   * Fallback method using axios for basic HTTP scraping
+   */
+  async fetchJobDataWithAxios() {
+    try {
+      console.log('🌐 Fetching job data from ICAO (fallback HTTP method)...');
+      
+      const response = await axios.get(this.targetUrl, {
+        timeout: 30000,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+      });
+
+      const $ = cheerio.load(response.data);
+      
+      // Get page text for change detection (since we can't get actual jobs with basic HTTP)
+      let pageText = $('body').text().replace(/\s+/g, ' ').trim();
+      
+      // Remove dynamic elements that change frequently
+      pageText = pageText
+        .replace(/\d{1,2}:\d{2}:\d{2}/g, '') // Remove timestamps
+        .replace(/\d{1,2}\/\d{1,2}\/\d{4}/g, '') // Remove dates
+        .replace(/loading|please wait|fetching/gi, '') // Remove loading text
+        .replace(/\s+/g, ' ') // Normalize whitespace
+        .trim();
+      
+      const pageHash = this.generateHash(pageText);
+      
+      console.log(`✅ Fallback scraping complete: content length: ${pageText.length}`);
+      console.log('⚠️  Note: Using fallback method - job details may be limited');
+      
+      return {
+        jobs: [], // Can't extract individual jobs without JavaScript rendering
+        pageHash,
+        pageText: pageText.substring(0, 2000),
+        timestamp: new Date().toISOString(),
+        totalJobs: 0, // Unknown without JavaScript rendering
+        method: 'axios-fallback'
+      };
+
+    } catch (error) {
+      console.error('❌ Error fetching job data with fallback method:', error.message);
+      throw error;
     }
   }
 
