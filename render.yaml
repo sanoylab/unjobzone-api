@@ -1,0 +1,33 @@
+# Render.com configuration for ICAO Job Monitor
+services:
+  - type: web
+    name: icao-job-monitor
+    env: node
+    buildCommand: |
+      npm install
+      npx puppeteer browsers install chrome
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PUPPETEER_SKIP_CHROMIUM_DOWNLOAD
+        value: false
+      - key: PUPPETEER_EXECUTABLE_PATH
+        value: /opt/render/.cache/puppeteer/chrome/linux-*/chrome-linux*/chrome
+    # Add system packages for Chrome
+    systemPackages:
+      - chromium
+      - chromium-sandbox
+      - libgconf-2-4
+      - libxss1
+      - libxtst6
+      - libxrandr2
+      - libasound2
+      - libpangocairo-1.0-0
+      - libatk1.0-0
+      - libcairo-gobject2
+      - libgtk-3-0
+      - libgdk-pixbuf2.0-0
+      - libnspr4
+      - libnss3
+      - libxcb1

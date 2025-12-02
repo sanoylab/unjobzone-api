@@ -9,7 +9,8 @@
     "job-monitor": "node run-job-monitor.js",
     "test-job-monitor": "node test-job-monitor-email.js",
     "install-chrome": "./install-chrome.sh",
-    "postinstall": "npx puppeteer browsers install chrome",
+    "build": "./render-build.sh",
+    "postinstall": "npx puppeteer browsers install chrome || echo 'Puppeteer install failed, will use fallback'",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
