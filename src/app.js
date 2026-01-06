@@ -105,6 +105,7 @@ app.listen(PORT, async () => {
   runEtl();
   
   // Initialize ICAO Job Monitor if email credentials are provided
+  /*
   if (process.env.MONITOR_EMAIL_USER && process.env.MONITOR_EMAIL_PASS) {
     try {
       console.log('🔍 Initializing ICAO Job Monitor...');
@@ -119,6 +120,7 @@ app.listen(PORT, async () => {
     console.log('ℹ️  ICAO Job Monitor disabled - missing email credentials');
     console.log('   Add MONITOR_EMAIL_USER and MONITOR_EMAIL_PASS to .env to enable');
   }
+  */
 });
 
 const runEtl = async () => {
