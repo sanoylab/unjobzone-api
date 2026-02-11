@@ -37,7 +37,7 @@ const {
 // Import Job Monitor for ICAO jobs
 const JobMonitor = require("./job-monitor");
 
-const PORT = process.env.PORT;
+const PORT = process.env.PORT || 3000;
 
 const errors = require("./error-middleware");
 const Sentry = require("@sentry/node");
