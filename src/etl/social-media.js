@@ -8,19 +8,12 @@ const { credentials } = require("./db");
 
 const pool = new Pool(credentials);
 
-// Function to upload image to LinkedIn and get asset ID
+// Function to upload image to LinkedIn and get image URN (new REST API)
 const uploadImageToLinkedIn = async (imagePath) => {
-  const url = "https://api.linkedin.com/v2/assets?action=registerUpload";
+  const url = "https://api.linkedin.com/rest/images?action=initializeUpload";
   const payload = {
-    registerUploadRequest: {
-      recipes: ["urn:li:digitalmediaRecipe:feedshare-image"],
-      owner: `urn:li:company:${process.env.LINKEDIN_ORGANIZATION_ID}`,
-      serviceRelationships: [
-        {
-          relationshipType: "OWNER",
-          identifier: "urn:li:userGeneratedContent"
-        }
-      ]
+    initializeUploadRequest: {
+      owner: `urn:li:organization:${process.env.LINKEDIN_ORGANIZATION_ID}`
     }
   };
 
@@ -29,48 +22,41 @@ const uploadImageToLinkedIn = async (imagePath) => {
     headers: {
       'Authorization': `Bearer ${process.env.LINKEDIN_ACCESS_TOKEN}`,
       'Content-Type': 'application/json',
-      'X-Restli-Protocol-Version': '2.0.0'
+      'X-Restli-Protocol-Version': '2.0.0',
+      'LinkedIn-Version': '202401'
     },
     body: JSON.stringify(payload)
   });
 
   if (!response.ok) {
     const errorData = await response.json();
-    console.error('LinkedIn API Error Details:', {
+    console.error('LinkedIn Image Initialize Error Details:', {
       status: response.status,
       statusText: response.statusText,
-      headers: Object.fromEntries(response.headers),
       error: errorData
     });
     throw new Error(`LinkedIn API error: ${errorData.message || response.statusText}`);
   }
 
-  const uploadResponse = await response.json();
-  const uploadUrl = uploadResponse.value.uploadMechanism["com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest"].uploadUrl;
-  const asset = uploadResponse.value.asset;
+  const initResponse = await response.json();
+  const uploadUrl = initResponse.value.uploadUrl;
+  const imageUrn = initResponse.value.image;
 
-  // Upload the image to the provided URL
+  // Upload the image binary to the provided URL
   const imageResponse = await fetch(uploadUrl, {
     method: "PUT",
     headers: {
       'Authorization': `Bearer ${process.env.LINKEDIN_ACCESS_TOKEN}`,
-      'Content-Type': 'image/jpeg'
+      'Content-Type': 'application/octet-stream'
     },
     body: fs.readFileSync(imagePath)
   });
 
   if (!imageResponse.ok) {
-    const errorData = await imageResponse.json();
-    console.error('LinkedIn Image Upload Error Details:', {
-      status: imageResponse.status,
-      statusText: imageResponse.statusText,
-      headers: Object.fromEntries(imageResponse.headers),
-      error: errorData
-    });
-    throw new Error(`LinkedIn Image Upload error: ${errorData.message || imageResponse.statusText}`);
+    throw new Error(`LinkedIn image upload failed: ${imageResponse.status} ${imageResponse.statusText}`);
   }
 
-  return asset;
+  return imageUrn;
 };
 
 // Function to get a random image from the directory
@@ -365,41 +351,30 @@ module.exports.postJobNetworkPostsToLinkedIn = async (jobNetwork) => {
     }
 
     // Create LinkedIn share with verified author URN
-    const authorUrn = `urn:li:company:${organizationId}`;
+    const authorUrn = `urn:li:organization:${organizationId}`;
 
-    const url = "https://api.linkedin.com/v2/ugcPosts";
-    
+    const url = "https://api.linkedin.com/rest/posts";
+
     // Create different payload based on whether we have an image or not
     const payload = {
       author: authorUrn,
-      lifecycleState: "PUBLISHED",
-      specificContent: {
-        "com.linkedin.ugc.ShareContent": {
-          shareCommentary: {
-            text: message
-          },
-          ...(asset ? {
-            shareMediaCategory: "IMAGE",
-            media: [
-              {
-                status: "READY",
-                description: {
-                  text: "Check out these amazing job opportunities!"
-                },
-                media: asset,
-                title: {
-                  text: "Job Opportunities"
-                }
-              }
-            ]
-          } : {
-            shareMediaCategory: "NONE"
-          })
-        }
+      commentary: message,
+      visibility: "PUBLIC",
+      distribution: {
+        feedDistribution: "MAIN_FEED",
+        targetEntities: [],
+        thirdPartyDistributionChannels: []
       },
-      visibility: {
-        "com.linkedin.ugc.MemberNetworkVisibility": "PUBLIC"
-      }
+      ...(asset ? {
+        content: {
+          media: {
+            altText: "Job opportunities at the United Nations",
+            id: asset
+          }
+        }
+      } : {}),
+      lifecycleState: "PUBLISHED",
+      isReshareDisabledByAuthor: false
     };
 
     const response = await fetch(url, {
@@ -407,28 +382,29 @@ module.exports.postJobNetworkPostsToLinkedIn = async (jobNetwork) => {
       headers: {
         'Authorization': `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
-        'X-Restli-Protocol-Version': '2.0.0'
+        'X-Restli-Protocol-Version': '2.0.0',
+        'LinkedIn-Version': '202401'
       },
       body: JSON.stringify(payload)
     });
 
-    if (!response.ok) {
-      const errorData = await response.json();
+    if (response.status !== 201 && !response.ok) {
+      const errorData = await response.json().catch(() => ({}));
       console.error('LinkedIn API Error Details:', {
         status: response.status,
         statusText: response.statusText,
-        headers: Object.fromEntries(response.headers),
         error: errorData
       });
       throw new Error(`LinkedIn API error: ${errorData.message || response.statusText}`);
     }
 
-    const linkedinResponse = await response.json();
+    const postId = response.headers.get('x-restli-id') || response.headers.get('X-RestLi-Id');
+    const linkedinResponse = { id: postId };
     console.log("Successfully posted to LinkedIn:", linkedinResponse);
-    
+
     // Log success status
     await logLinkedInStatus(`network_${jobNetwork.toLowerCase().replace(/[^a-z0-9]/g, '_')}`, 'success', {
-      linkedinPostId: linkedinResponse.id,
+      linkedinPostId: postId,
       jobsPosted: jobPosts.length
     });
     
@@ -773,41 +749,30 @@ module.exports.postExpiringSoonJobPostsToLinkedIn = async () => {
     }
 
     // Create LinkedIn share with verified author URN
-    const authorUrn = `urn:li:company:${organizationId}`;
+    const authorUrn = `urn:li:organization:${organizationId}`;
 
-    const url = "https://api.linkedin.com/v2/ugcPosts";
-    
+    const url = "https://api.linkedin.com/rest/posts";
+
     // Create different payload based on whether we have an image or not
     const payload = {
       author: authorUrn,
-      lifecycleState: "PUBLISHED",
-      specificContent: {
-        "com.linkedin.ugc.ShareContent": {
-          shareCommentary: {
-            text: message
-          },
-          ...(asset ? {
-            shareMediaCategory: "IMAGE",
-            media: [
-              {
-                status: "READY",
-                description: {
-                  text: "Check out these amazing job opportunities!"
-                },
-                media: asset,
-                title: {
-                  text: "Job Opportunities"
-                }
-              }
-            ]
-          } : {
-            shareMediaCategory: "NONE"
-          })
-        }
+      commentary: message,
+      visibility: "PUBLIC",
+      distribution: {
+        feedDistribution: "MAIN_FEED",
+        targetEntities: [],
+        thirdPartyDistributionChannels: []
       },
-      visibility: {
-        "com.linkedin.ugc.MemberNetworkVisibility": "PUBLIC"
-      }
+      ...(asset ? {
+        content: {
+          media: {
+            altText: "Expiring UN job opportunities - apply now",
+            id: asset
+          }
+        }
+      } : {}),
+      lifecycleState: "PUBLISHED",
+      isReshareDisabledByAuthor: false
     };
 
     const response = await fetch(url, {
@@ -815,28 +780,29 @@ module.exports.postExpiringSoonJobPostsToLinkedIn = async () => {
       headers: {
         'Authorization': `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
-        'X-Restli-Protocol-Version': '2.0.0'
+        'X-Restli-Protocol-Version': '2.0.0',
+        'LinkedIn-Version': '202401'
       },
       body: JSON.stringify(payload)
     });
 
-    if (!response.ok) {
-      const errorData = await response.json();
+    if (response.status !== 201 && !response.ok) {
+      const errorData = await response.json().catch(() => ({}));
       console.error('LinkedIn API Error Details:', {
         status: response.status,
         statusText: response.statusText,
-        headers: Object.fromEntries(response.headers),
         error: errorData
       });
       throw new Error(`LinkedIn API error: ${errorData.message || response.statusText}`);
     }
 
-    const linkedinResponse = await response.json();
+    const postId = response.headers.get('x-restli-id') || response.headers.get('X-RestLi-Id');
+    const linkedinResponse = { id: postId };
     console.log("Successfully posted to LinkedIn:", linkedinResponse);
-    
+
     // Log success status
     await logLinkedInStatus('expiring', 'success', {
-      linkedinPostId: linkedinResponse.id,
+      linkedinPostId: postId,
       jobsPosted: jobPosts.length
     });
     
@@ -1103,7 +1069,7 @@ const postFacebookWithImage = async (message, imagePath) => {
     // Create a simple text post with image note as fallback for now
     console.log('🔄 Using text post with image reference (Facebook API compatibility issue)');
     
-    const feedUrl = `https://graph.facebook.com/v18.0/${process.env.FACEBOOK_PAGE_ID}/feed`;
+    const feedUrl = `https://graph.facebook.com/v21.0/${process.env.FACEBOOK_PAGE_ID}/feed`;
     const payload = {
       message: `${message}\n\n📸 Photo: ${path.basename(imagePath)}`,
       access_token: process.env.FACEBOOK_PAGE_ACCESS_TOKEN
@@ -1437,7 +1403,7 @@ const postJobNetworkPostsToFacebook = async (jobNetwork) => {
       } catch (error) {
         console.log('📝 All image methods failed, using text-only post');
         // Ultimate fallback - text only
-        const url = `https://graph.facebook.com/v18.0/${process.env.FACEBOOK_PAGE_ID}/feed`;
+        const url = `https://graph.facebook.com/v21.0/${process.env.FACEBOOK_PAGE_ID}/feed`;
         const payload = {
           message: message,
           access_token: process.env.FACEBOOK_PAGE_ACCESS_TOKEN
@@ -1454,7 +1420,7 @@ const postJobNetworkPostsToFacebook = async (jobNetwork) => {
     } else {
       // Text-only post to feed endpoint
       console.log('📝 Posting text-only to Facebook feed');
-      const url = `https://graph.facebook.com/v18.0/${process.env.FACEBOOK_PAGE_ID}/feed`;
+      const url = `https://graph.facebook.com/v21.0/${process.env.FACEBOOK_PAGE_ID}/feed`;
       const payload = {
         message: message,
         access_token: process.env.FACEBOOK_PAGE_ACCESS_TOKEN
@@ -1723,7 +1689,7 @@ const postExpiringSoonJobPostsToFacebook = async () => {
           // Use the uploaded photo ID to create a post
           console.log(`📝 Creating Facebook post with uploaded image (ID: ${photoId})...`);
           
-          const feedUrl = `https://graph.facebook.com/v18.0/${process.env.FACEBOOK_PAGE_ID}/feed`;
+          const feedUrl = `https://graph.facebook.com/v21.0/${process.env.FACEBOOK_PAGE_ID}/feed`;
           const postPayload = {
             message: message,
             attached_media: JSON.stringify([{ media_fbid: photoId }]),
@@ -1744,7 +1710,7 @@ const postExpiringSoonJobPostsToFacebook = async () => {
             console.log('⚠️ Post with uploaded image failed, trying direct photo post...');
             
             // Fallback: Try publishing the uploaded photo directly with caption
-            const publishUrl = `https://graph.facebook.com/v18.0/${photoId}`;
+            const publishUrl = `https://graph.facebook.com/v21.0/${photoId}`;
             const publishPayload = {
               is_published: true,
               message: message,
@@ -1762,7 +1728,7 @@ const postExpiringSoonJobPostsToFacebook = async () => {
         } else {
           // Image upload failed, fallback to text post with image mention
           console.log('📝 Image upload failed, using feed with image reference...');
-          const feedUrl = `https://graph.facebook.com/v18.0/${process.env.FACEBOOK_PAGE_ID}/feed`;
+          const feedUrl = `https://graph.facebook.com/v21.0/${process.env.FACEBOOK_PAGE_ID}/feed`;
           const feedPayload = {
             message: `${message}\n\n📸 Photo: ${path.basename(imagePath)}`,
             access_token: process.env.FACEBOOK_PAGE_ACCESS_TOKEN
@@ -1780,7 +1746,7 @@ const postExpiringSoonJobPostsToFacebook = async () => {
       } catch (error) {
         console.log('📝 All image methods failed, using text-only post');
         // Ultimate fallback - text only
-        const url = `https://graph.facebook.com/v18.0/${process.env.FACEBOOK_PAGE_ID}/feed`;
+        const url = `https://graph.facebook.com/v21.0/${process.env.FACEBOOK_PAGE_ID}/feed`;
         const payload = {
           message: message,
           access_token: process.env.FACEBOOK_PAGE_ACCESS_TOKEN
@@ -1797,7 +1763,7 @@ const postExpiringSoonJobPostsToFacebook = async () => {
     } else {
       // Text-only post to feed endpoint
       console.log('📝 Posting expiring jobs text-only to Facebook feed');
-      const url = `https://graph.facebook.com/v18.0/${process.env.FACEBOOK_PAGE_ID}/feed`;
+      const url = `https://graph.facebook.com/v21.0/${process.env.FACEBOOK_PAGE_ID}/feed`;
       const payload = {
         message: message,
         access_token: process.env.FACEBOOK_PAGE_ACCESS_TOKEN
@@ -1927,7 +1893,7 @@ const testFacebookSetup = async () => {
     
     // Test 4: Test Facebook API connection
     console.log('4️⃣  Testing Facebook API connection...');
-    const testUrl = `https://graph.facebook.com/v18.0/${process.env.FACEBOOK_PAGE_ID}?access_token=${process.env.FACEBOOK_PAGE_ACCESS_TOKEN}&fields=id,name`;
+    const testUrl = `https://graph.facebook.com/v21.0/${process.env.FACEBOOK_PAGE_ID}?access_token=${process.env.FACEBOOK_PAGE_ACCESS_TOKEN}&fields=id,name`;
     const testResponse = await fetch(testUrl);
     
     if (!testResponse.ok) {
