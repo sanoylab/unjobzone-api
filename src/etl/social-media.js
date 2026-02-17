@@ -23,7 +23,7 @@ const uploadImageToLinkedIn = async (imagePath) => {
       'Authorization': `Bearer ${process.env.LINKEDIN_ACCESS_TOKEN}`,
       'Content-Type': 'application/json',
       'X-Restli-Protocol-Version': '2.0.0',
-      'LinkedIn-Version': '202401'
+      'LinkedIn-Version': '20250101'
     },
     body: JSON.stringify(payload)
   });
@@ -383,7 +383,7 @@ module.exports.postJobNetworkPostsToLinkedIn = async (jobNetwork) => {
         'Authorization': `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
         'X-Restli-Protocol-Version': '2.0.0',
-        'LinkedIn-Version': '202401'
+        'LinkedIn-Version': '20250101'
       },
       body: JSON.stringify(payload)
     });
@@ -781,7 +781,7 @@ module.exports.postExpiringSoonJobPostsToLinkedIn = async () => {
         'Authorization': `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
         'X-Restli-Protocol-Version': '2.0.0',
-        'LinkedIn-Version': '202401'
+        'LinkedIn-Version': '20250101'
       },
       body: JSON.stringify(payload)
     });
@@ -944,13 +944,17 @@ const logLinkedInStatus = async (postType, status, stats = {}) => {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS linkedin_post_status (
         id SERIAL PRIMARY KEY,
-        post_type VARCHAR(50) NOT NULL, -- 'expiring', 'network_it', 'network_political', etc.
-        status VARCHAR(20) NOT NULL, -- 'success', 'failed', 'no_content'
-        linkedin_post_id VARCHAR(255), -- The actual LinkedIn post ID
+        post_type VARCHAR(150) NOT NULL,
+        status VARCHAR(20) NOT NULL,
+        linkedin_post_id VARCHAR(255),
         jobs_posted INTEGER DEFAULT 0,
         error_message TEXT,
         created_at TIMESTAMPTZ DEFAULT NOW()
       );
+    `);
+    // Expand post_type column if it was created with a smaller limit
+    await pool.query(`
+      ALTER TABLE linkedin_post_status ALTER COLUMN post_type TYPE VARCHAR(150)
     `);
     
     // Insert status

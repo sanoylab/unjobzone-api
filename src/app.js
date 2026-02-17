@@ -28,10 +28,12 @@ const { fetchAndProcessUnescoJobVacancies } = require("./etl/etl-unesco");
 const { removeDuplicateJobVacancies } = require("./etl/shared");
 
 // Import social media functions
-const { 
-  postExpiringSoonJobPostsToLinkedIn, 
-  postJobNetworkPostsToLinkedIn, 
-  refreshLinkedInToken 
+const {
+  postExpiringSoonJobPostsToLinkedIn,
+  postJobNetworkPostsToLinkedIn,
+  postJobNetworkPostsToFacebook,
+  postExpiringSoonJobPostsToFacebook,
+  refreshLinkedInToken
 } = require("./etl/social-media");
 
 // Import Job Monitor for ICAO jobs
@@ -419,215 +421,137 @@ cron.schedule("0 18 * * *", async() => {
   await runEtl();
 });
 
-// LinkedIn Posting Schedule - Morning batch (runs after 6 AM ETL completes)
-cron.schedule("0 7 * * *", async () => {
-  console.log("Running postExpiringSoonJobPostsToLinkedIn...", new Date());
+// Returns true if the error indicates an expired/invalid LinkedIn access token
+const isLinkedInTokenExpired = (error) => {
+  const msg = error.message || '';
+  return msg.includes('expired') || msg.includes('EXPIRED_ACCESS_TOKEN') || msg.includes('invalid_token');
+};
+
+// Helper: post a job network to LinkedIn (with token-refresh retry if refresh token exists)
+// then post to Facebook independently if LinkedIn failed or its auto-post to Facebook failed.
+const postNetworkJobsToAllPlatforms = async (jobNetwork) => {
+  let facebookPostedViaLinkedIn = false;
+
   try {
-    await postExpiringSoonJobPostsToLinkedIn();
-    console.log("Successfully posted expiring soon job posts to LinkedIn.");
+    const result = await postJobNetworkPostsToLinkedIn(jobNetwork);
+    facebookPostedViaLinkedIn = !!(result && result.autoPosted);
+    console.log(`✅ LinkedIn posted for: ${jobNetwork}`);
   } catch (error) {
-    console.error("Error posting expiring soon job posts to LinkedIn:", error);
+    if (isLinkedInTokenExpired(error) && process.env.LINKEDIN_REFRESH_TOKEN) {
+      console.log('LinkedIn token expired - attempting refresh and retry...');
+      try {
+        await refreshLinkedInToken();
+        const retryResult = await postJobNetworkPostsToLinkedIn(jobNetwork);
+        facebookPostedViaLinkedIn = !!(retryResult && retryResult.autoPosted);
+        console.log(`✅ LinkedIn posted for: ${jobNetwork} (after token refresh)`);
+      } catch (refreshError) {
+        console.error(`LinkedIn failed even after token refresh for ${jobNetwork}:`, refreshError.message);
+      }
+    } else if (isLinkedInTokenExpired(error)) {
+      console.error(`LinkedIn token expired for ${jobNetwork} - update LINKEDIN_ACCESS_TOKEN in env vars`);
+    } else {
+      console.error(`LinkedIn error for ${jobNetwork}:`, error.message);
+    }
   }
+
+  // Post to Facebook independently if it wasn't already posted via LinkedIn
+  if (!facebookPostedViaLinkedIn) {
+    try {
+      await postJobNetworkPostsToFacebook(jobNetwork);
+      console.log(`✅ Facebook posted independently for: ${jobNetwork}`);
+    } catch (fbError) {
+      console.error(`Facebook error for ${jobNetwork}:`, fbError.message);
+    }
+  }
+};
+
+// Helper: post expiring-soon jobs to both platforms independently
+const postExpiringSoonJobsToAllPlatforms = async () => {
+  let facebookPostedViaLinkedIn = false;
+
+  try {
+    const result = await postExpiringSoonJobPostsToLinkedIn();
+    facebookPostedViaLinkedIn = !!(result && result.autoPosted);
+    console.log('✅ LinkedIn posted expiring-soon jobs');
+  } catch (error) {
+    if (isLinkedInTokenExpired(error)) {
+      console.error('LinkedIn token expired for expiring jobs - update LINKEDIN_ACCESS_TOKEN in env vars');
+    } else {
+      console.error('LinkedIn error for expiring-soon jobs:', error.message);
+    }
+  }
+
+  if (!facebookPostedViaLinkedIn) {
+    try {
+      await postExpiringSoonJobPostsToFacebook();
+      console.log('✅ Facebook posted expiring-soon jobs independently');
+    } catch (fbError) {
+      console.error('Facebook error for expiring-soon jobs:', fbError.message);
+    }
+  }
+};
+
+// Social Media Posting Schedule (LinkedIn + Facebook) - Morning batch
+cron.schedule("0 7 * * *", async () => {
+  console.log("Posting expiring-soon jobs to all platforms...", new Date());
+  await postExpiringSoonJobsToAllPlatforms();
 });
 
 cron.schedule("0 8 * * *", async () => {
-  console.log("Running postJobNetworkPostsToLinkedIn for IT...", new Date());
-  try {
-    await postJobNetworkPostsToLinkedIn("Information and Telecommunication Technology");
-    console.log("Successfully posted IT job posts to LinkedIn.");
-  } catch (error) {
-    console.error("Error posting IT job posts to LinkedIn:", error);
-  }
+  console.log("Posting IT jobs to all platforms...", new Date());
+  await postNetworkJobsToAllPlatforms("Information and Telecommunication Technology");
 });
 
 cron.schedule("0 9 * * *", async () => {
-  console.log("Running postJobNetworkPostsToLinkedIn for Political/Peace/Humanitarian...", new Date());
-  try {
-    await postJobNetworkPostsToLinkedIn("Political, Peace and Humanitarian");
-    console.log("Successfully posted Political, Peace and Humanitarian job posts to LinkedIn.");
-  } catch (error) {
-    console.error("Error posting Political, Peace and Humanitarian job posts to LinkedIn:", error);
-  }
+  console.log("Posting Political/Peace/Humanitarian jobs to all platforms...", new Date());
+  await postNetworkJobsToAllPlatforms("Political, Peace and Humanitarian");
 });
 
-// Additional LinkedIn Posting Schedule - Midday batch
+// Social Media Posting Schedule - Midday batch
 cron.schedule("0 10 * * *", async () => {
-  console.log("Running postJobNetworkPostsToLinkedIn for Health/Project/Programme Management...", new Date());
-  try {
-    await postJobNetworkPostsToLinkedIn("Health, Project Management, Programme Management");
-    console.log("Successfully posted Health/Project/Programme Management job posts to LinkedIn.");
-  } catch (error) {
-    if (error.message?.includes('EXPIRED_ACCESS_TOKEN')) {
-      console.log('Attempting to refresh LinkedIn token and retry...');
-      try {
-        await refreshLinkedInToken();
-        await postJobNetworkPostsToLinkedIn("Health, Project Management, Programme Management");
-        console.log("Successfully posted after token refresh");
-      } catch (refreshError) {
-        console.error("Failed even after token refresh:", refreshError);
-      }
-    } else {
-      console.error("Error posting job posts to LinkedIn:", error);
-    }
-  }
+  console.log("Posting Health/Project/Programme Management jobs to all platforms...", new Date());
+  await postNetworkJobsToAllPlatforms("Health, Project Management, Programme Management");
 });
 
 cron.schedule("0 11 * * *", async () => {
-  console.log("Running postJobNetworkPostsToLinkedIn for Economic, Social and Development...", new Date());
-  try {
-    await postJobNetworkPostsToLinkedIn("Economic, Social and Development");
-    console.log("Successfully posted Economic, Social and Development job posts to LinkedIn.");
-  } catch (error) {
-    if (error.message?.includes('EXPIRED_ACCESS_TOKEN')) {
-      console.log('Attempting to refresh LinkedIn token and retry...');
-      try {
-        await refreshLinkedInToken();
-        await postJobNetworkPostsToLinkedIn("Economic, Social and Development");
-        console.log("Successfully posted after token refresh");
-      } catch (refreshError) {
-        console.error("Failed even after token refresh:", refreshError);
-      }
-    } else {
-      console.error("Error posting job posts to LinkedIn:", error);
-    }
-  }
+  console.log("Posting Economic/Social/Development jobs to all platforms...", new Date());
+  await postNetworkJobsToAllPlatforms("Economic, Social and Development");
 });
 
 cron.schedule("0 12 * * *", async () => {
-  console.log("Running postJobNetworkPostsToLinkedIn for Internal Security and Safety...", new Date());
-  try {
-    await postJobNetworkPostsToLinkedIn("Internal Security and Safety");
-    console.log("Successfully posted Internal Security and Safety job posts to LinkedIn.");
-  } catch (error) {
-    if (error.message?.includes('EXPIRED_ACCESS_TOKEN')) {
-      console.log('Attempting to refresh LinkedIn token and retry...');
-      try {
-        await refreshLinkedInToken();
-        await postJobNetworkPostsToLinkedIn("Internal Security and Safety");
-        console.log("Successfully posted after token refresh");
-      } catch (refreshError) {
-        console.error("Failed even after token refresh:", refreshError);
-      }
-    } else {
-      console.error("Error posting job posts to LinkedIn:", error);
-    }
-  }
+  console.log("Posting Internal Security and Safety jobs to all platforms...", new Date());
+  await postNetworkJobsToAllPlatforms("Internal Security and Safety");
 });
 
 cron.schedule("0 13 * * *", async () => {
-  console.log("Running postJobNetworkPostsToLinkedIn for Communication...", new Date());
-  try {
-    await postJobNetworkPostsToLinkedIn("Communication");
-    console.log("Successfully posted Communication job posts to LinkedIn.");
-  } catch (error) {
-    if (error.message?.includes('EXPIRED_ACCESS_TOKEN')) {
-      console.log('Attempting to refresh LinkedIn token and retry...');
-      try {
-        await refreshLinkedInToken();
-        await postJobNetworkPostsToLinkedIn("Communication");
-        console.log("Successfully posted after token refresh");
-      } catch (refreshError) {
-        console.error("Failed even after token refresh:", refreshError);
-      }
-    } else {
-      console.error("Error posting job posts to LinkedIn:", error);
-    }
-  }
+  console.log("Posting Communication jobs to all platforms...", new Date());
+  await postNetworkJobsToAllPlatforms("Communication");
 });
 
 cron.schedule("0 14 * * *", async () => {
-  console.log("Running postJobNetworkPostsToLinkedIn for Legal...", new Date());
-  try {
-    await postJobNetworkPostsToLinkedIn("Legal");
-    console.log("Successfully posted Legal job posts to LinkedIn.");
-  } catch (error) {
-    if (error.message?.includes('EXPIRED_ACCESS_TOKEN')) {
-      console.log('Attempting to refresh LinkedIn token and retry...');
-      try {
-        await refreshLinkedInToken();
-        await postJobNetworkPostsToLinkedIn("Legal");
-        console.log("Successfully posted after token refresh");
-      } catch (refreshError) {
-        console.error("Failed even after token refresh:", refreshError);
-      }
-    } else {
-      console.error("Error posting job posts to LinkedIn:", error);
-    }
-  }
+  console.log("Posting Legal jobs to all platforms...", new Date());
+  await postNetworkJobsToAllPlatforms("Legal");
 });
 
 cron.schedule("0 15 * * *", async () => {
-  console.log("Running postJobNetworkPostsToLinkedIn for Public Information and Conference Management...", new Date());
-  try {
-    await postJobNetworkPostsToLinkedIn("Public Information and Conference Management");
-    console.log("Successfully posted Public Information and Conference Management job posts to LinkedIn.");
-  } catch (error) {
-    if (error.message?.includes('EXPIRED_ACCESS_TOKEN')) {
-      console.log('Attempting to refresh LinkedIn token and retry...');
-      try {
-        await refreshLinkedInToken();
-        await postJobNetworkPostsToLinkedIn("Public Information and Conference Management");
-        console.log("Successfully posted after token refresh");
-      } catch (refreshError) {
-        console.error("Failed even after token refresh:", refreshError);
-      }
-    } else {
-      console.error("Error posting job posts to LinkedIn:", error);
-    }
-  }
+  console.log("Posting Public Information/Conference Management jobs to all platforms...", new Date());
+  await postNetworkJobsToAllPlatforms("Public Information and Conference Management");
 });
 
 cron.schedule("0 16 * * *", async () => {
-  console.log("Running postJobNetworkPostsToLinkedIn for Science...", new Date());
-  try {
-    await postJobNetworkPostsToLinkedIn("Science");
-    console.log("Successfully posted Science job posts to LinkedIn.");
-  } catch (error) {
-    if (error.message?.includes('EXPIRED_ACCESS_TOKEN')) {
-      console.log('Attempting to refresh LinkedIn token and retry...');
-      try {
-        await refreshLinkedInToken();
-        await postJobNetworkPostsToLinkedIn("Science");
-        console.log("Successfully posted after token refresh");
-      } catch (refreshError) {
-        console.error("Failed even after token refresh:", refreshError);
-      }
-    } else {
-      console.error("Error posting job posts to LinkedIn:", error);
-    }
-  }
+  console.log("Posting Science jobs to all platforms...", new Date());
+  await postNetworkJobsToAllPlatforms("Science");
 });
 
-// LinkedIn Posting Schedule - Evening batch (runs after 6 PM ETL completes)
+// Social Media Posting Schedule - Evening batch
 cron.schedule("0 19 * * *", async () => {
-  console.log("Running postJobNetworkPostsToLinkedIn for Management and Administration...", new Date());
-  try {
-    await postJobNetworkPostsToLinkedIn("Management and Administration");
-    console.log("Successfully posted Management and Administration job posts to LinkedIn.");
-  } catch (error) {
-    if (error.message?.includes('EXPIRED_ACCESS_TOKEN')) {
-      console.log('Attempting to refresh LinkedIn token and retry...');
-      try {
-        await refreshLinkedInToken();
-        await postJobNetworkPostsToLinkedIn("Management and Administration");
-        console.log("Successfully posted after token refresh");
-      } catch (refreshError) {
-        console.error("Failed even after token refresh:", refreshError);
-      }
-    } else {
-      console.error("Error posting job posts to LinkedIn:", error);
-    }
-  }
+  console.log("Posting Management and Administration jobs to all platforms...", new Date());
+  await postNetworkJobsToAllPlatforms("Management and Administration");
 });
 
 cron.schedule("0 20 * * *", async () => {
-  console.log("Running postJobNetworkPostsToLinkedIn for Logistics...", new Date());
-  try {
-    await postJobNetworkPostsToLinkedIn("Logistics, Transportation and Supply Chain");
-    console.log("Successfully posted Logistics job posts to LinkedIn.");
-  } catch (error) {
-    console.error("Error posting Logistics job posts to LinkedIn:", error);
-  }
+  console.log("Posting Logistics jobs to all platforms...", new Date());
+  await postNetworkJobsToAllPlatforms("Logistics, Transportation and Supply Chain");
 });
 
 // Weekly blog post generation (commented out as per original code)
