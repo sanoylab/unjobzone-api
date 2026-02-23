@@ -35,9 +35,12 @@ module.exports.auth = async (req, res, next) => {
     const validTempoToken = timingSafeEqual(token, process.env.TEMPO_ACCESS_TOKEN_SECRET);
     
     if(validAccessToken || validTempoToken){
+        // Log authentication success for security auditing
+        // Note: In production, consider using a dedicated security logging system
         console.log("Authentication success!", {
           timestamp: new Date().toISOString(),
-          ip: req.ip || req.connection?.remoteAddress,
+          // Only log hashed IP for privacy compliance
+          ipHash: req.ip ? crypto.createHash('sha256').update(req.ip).digest('hex').substring(0, 16) : 'unknown',
           path: req.path
         });
       next();
@@ -46,8 +49,12 @@ module.exports.auth = async (req, res, next) => {
     }
 
   } catch (e) {
-    // Log full error for debugging but return generic message to client
-    console.error("Authentication error:", e);
+    // Log error details for debugging but sanitize to avoid exposing sensitive data
+    console.error("Authentication error:", {
+      message: e.message,
+      type: e.constructor.name,
+      timestamp: new Date().toISOString()
+    });
     res.status(500).send("Authentication error");
   }
 };
