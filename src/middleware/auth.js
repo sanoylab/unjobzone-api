@@ -11,7 +11,7 @@ module.exports.auth = async (req, res, next) => {
       return res.status(401).send("A token is required for authentication");
     }
     
-    if(token == process.env.ACCESS_TOKEN_SECRET || token == process.env.TEMPO_ACCESS_TOKEN_SECRET){
+    if(token === process.env.ACCESS_TOKEN_SECRET || token === process.env.TEMPO_ACCESS_TOKEN_SECRET){
         console.log("Authentication success!")
       next();
     } else {
