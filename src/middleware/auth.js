@@ -1,5 +1,24 @@
 const jwt = require("jsonwebtoken");
+const crypto = require("crypto");
 require("dotenv").config();
+
+// Helper function for timing-safe string comparison
+const timingSafeEqual = (a, b) => {
+  if (!a || !b) return false;
+  
+  // Ensure both strings are the same length for crypto.timingSafeEqual
+  const bufA = Buffer.from(a);
+  const bufB = Buffer.from(b);
+  
+  // If lengths differ, compare against a dummy buffer to maintain constant time
+  if (bufA.length !== bufB.length) {
+    // Still perform a comparison to prevent timing attacks on length
+    crypto.timingSafeEqual(bufA, Buffer.alloc(bufA.length));
+    return false;
+  }
+  
+  return crypto.timingSafeEqual(bufA, bufB);
+};
 
 // Main authentication middleware - UNCHANGED to maintain backward compatibility
 module.exports.auth = async (req, res, next) => {
@@ -11,7 +30,11 @@ module.exports.auth = async (req, res, next) => {
       return res.status(401).send("A token is required for authentication");
     }
     
-    if(token === process.env.ACCESS_TOKEN_SECRET || token === process.env.TEMPO_ACCESS_TOKEN_SECRET){
+    // Use timing-safe comparison to prevent timing attacks
+    const validAccessToken = timingSafeEqual(token, process.env.ACCESS_TOKEN_SECRET);
+    const validTempoToken = timingSafeEqual(token, process.env.TEMPO_ACCESS_TOKEN_SECRET);
+    
+    if(validAccessToken || validTempoToken){
         console.log("Authentication success!")
       next();
     } else {
@@ -19,6 +42,8 @@ module.exports.auth = async (req, res, next) => {
     }
 
   } catch (e) {
+    // Log actual error for debugging but return generic message to client
+    console.error("Authentication error:", e.message);
     res.status(500).send("Authentication error");
   }
 };
