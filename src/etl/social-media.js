@@ -1,4 +1,3 @@
-const e = require("express");
 const { Pool } = require("pg");
 const fs = require("fs");
 const path = require("path");
@@ -368,7 +367,7 @@ module.exports.postJobNetworkPostsToLinkedIn = async (jobNetwork) => {
       ...(asset ? {
         content: {
           media: {
-            altText: "Job opportunities at the United Nations",
+            title: "Job opportunities at the United Nations",
             id: asset
           }
         }
@@ -766,7 +765,7 @@ module.exports.postExpiringSoonJobPostsToLinkedIn = async () => {
       ...(asset ? {
         content: {
           media: {
-            altText: "Expiring UN job opportunities - apply now",
+            title: "Expiring UN job opportunities - apply now",
             id: asset
           }
         }
