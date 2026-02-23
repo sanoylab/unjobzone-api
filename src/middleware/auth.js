@@ -35,15 +35,19 @@ module.exports.auth = async (req, res, next) => {
     const validTempoToken = timingSafeEqual(token, process.env.TEMPO_ACCESS_TOKEN_SECRET);
     
     if(validAccessToken || validTempoToken){
-        console.log("Authentication success!")
+        console.log("Authentication success!", {
+          timestamp: new Date().toISOString(),
+          ip: req.ip || req.connection?.remoteAddress,
+          path: req.path
+        });
       next();
     } else {
         return res.status(401).send("Invalid Token");
     }
 
   } catch (e) {
-    // Log actual error for debugging but return generic message to client
-    console.error("Authentication error:", e.message);
+    // Log full error for debugging but return generic message to client
+    console.error("Authentication error:", e);
     res.status(500).send("Authentication error");
   }
 };
