@@ -19,7 +19,7 @@ module.exports.auth = async (req, res, next) => {
     }
 
   } catch (e) {
-    res.send(e).status(500);
+    res.status(500).send("Authentication error");
   }
 };
 
