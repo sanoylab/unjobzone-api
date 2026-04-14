@@ -1,12 +1,134 @@
-const e = require("express");
 const { Pool } = require("pg");
 const fs = require("fs");
 const path = require("path");
-const FormData = require('form-data');
 require("dotenv").config();
 const { credentials } = require("./db");
 
 const pool = new Pool(credentials);
+
+const LINKEDIN_MAX_COMMENTARY_LENGTH = 3000;
+
+// Returns the LinkedIn REST API version in the required YYYYMM format.
+const getLinkedInApiVersion = () => {
+  const configuredVersion = process.env.LINKEDIN_API_VERSION?.trim();
+
+  if (configuredVersion) {
+    if (/^\d{6}$/.test(configuredVersion)) {
+      return configuredVersion;
+    }
+
+    console.warn(
+      `⚠️ Invalid LINKEDIN_API_VERSION "${configuredVersion}". Expected YYYYMM, falling back to current UTC month.`
+    );
+  }
+
+  const now = new Date();
+  const year = now.getUTCFullYear();
+  const month = String(now.getUTCMonth() + 1).padStart(2, "0");
+  return `${year}${month}`;
+};
+
+// Returns shared LinkedIn REST headers for JSON requests.
+const getLinkedInJsonHeaders = (accessToken) => ({
+  Authorization: `Bearer ${accessToken}`,
+  "Content-Type": "application/json",
+  "X-Restli-Protocol-Version": "2.0.0",
+  "LinkedIn-Version": getLinkedInApiVersion()
+});
+
+// Returns a safe LinkedIn commentary string within platform limits.
+const truncateLinkedInCommentary = (message) => {
+  if (!message || message.length <= LINKEDIN_MAX_COMMENTARY_LENGTH) {
+    return message;
+  }
+
+  const truncationNotice = "\n\n... Read more jobs at www.unjobzone.com";
+  const truncatedMessage = message
+    .slice(0, LINKEDIN_MAX_COMMENTARY_LENGTH - truncationNotice.length)
+    .trimEnd();
+
+  console.warn(
+    `⚠️ LinkedIn commentary exceeded ${LINKEDIN_MAX_COMMENTARY_LENGTH} characters and was truncated before posting.`
+  );
+
+  return `${truncatedMessage}${truncationNotice}`;
+};
+
+// Parses LinkedIn API error responses without assuming JSON.
+const parseLinkedInErrorResponse = async (response) => {
+  const rawBody = await response.text();
+
+  if (!rawBody) {
+    return {
+      message: response.statusText || "Unknown LinkedIn API error",
+      details: null
+    };
+  }
+
+  try {
+    const parsedBody = JSON.parse(rawBody);
+    return {
+      message:
+        parsedBody.message ||
+        parsedBody.error_description ||
+        parsedBody.error ||
+        response.statusText ||
+        "Unknown LinkedIn API error",
+      details: parsedBody
+    };
+  } catch (error) {
+    return {
+      message: rawBody,
+      details: rawBody
+    };
+  }
+};
+
+// Creates a LinkedIn post and returns the created post id on success.
+const createLinkedInPost = async ({ accessToken, authorUrn, commentary, asset, altText }) => {
+  const payload = {
+    author: authorUrn,
+    commentary,
+    visibility: "PUBLIC",
+    distribution: {
+      feedDistribution: "MAIN_FEED",
+      targetEntities: [],
+      thirdPartyDistributionChannels: []
+    },
+    ...(asset ? {
+      content: {
+        media: {
+          altText,
+          id: asset
+        }
+      }
+    } : {}),
+    lifecycleState: "PUBLISHED",
+    isReshareDisabledByAuthor: false
+  };
+
+  const response = await fetch("https://api.linkedin.com/rest/posts", {
+    method: "POST",
+    headers: getLinkedInJsonHeaders(accessToken),
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    const errorData = await parseLinkedInErrorResponse(response);
+    return {
+      ok: false,
+      status: response.status,
+      statusText: response.statusText,
+      errorMessage: errorData.message,
+      errorDetails: errorData.details
+    };
+  }
+
+  return {
+    ok: true,
+    postId: response.headers.get("x-restli-id") || response.headers.get("X-RestLi-Id")
+  };
+};
 
 // Function to upload image to LinkedIn and get image URN (new REST API)
 const uploadImageToLinkedIn = async (imagePath) => {
@@ -19,23 +141,18 @@ const uploadImageToLinkedIn = async (imagePath) => {
 
   const response = await fetch(url, {
     method: "POST",
-    headers: {
-      'Authorization': `Bearer ${process.env.LINKEDIN_ACCESS_TOKEN}`,
-      'Content-Type': 'application/json',
-      'X-Restli-Protocol-Version': '2.0.0',
-      'LinkedIn-Version': '20250101'
-    },
+    headers: getLinkedInJsonHeaders(process.env.LINKEDIN_ACCESS_TOKEN),
     body: JSON.stringify(payload)
   });
 
   if (!response.ok) {
-    const errorData = await response.json();
+    const errorData = await parseLinkedInErrorResponse(response);
     console.error('LinkedIn Image Initialize Error Details:', {
       status: response.status,
       statusText: response.statusText,
-      error: errorData
+      error: errorData.details
     });
-    throw new Error(`LinkedIn API error: ${errorData.message || response.statusText}`);
+    throw new Error(`LinkedIn API error: ${errorData.message}`);
   }
 
   const initResponse = await response.json();
@@ -53,7 +170,8 @@ const uploadImageToLinkedIn = async (imagePath) => {
   });
 
   if (!imageResponse.ok) {
-    throw new Error(`LinkedIn image upload failed: ${imageResponse.status} ${imageResponse.statusText}`);
+    const imageUploadError = await imageResponse.text();
+    throw new Error(`LinkedIn image upload failed: ${imageResponse.status} ${imageResponse.statusText}${imageUploadError ? ` - ${imageUploadError}` : ''}`);
   }
 
   return imageUrn;
@@ -319,7 +437,7 @@ module.exports.postJobNetworkPostsToLinkedIn = async (jobNetwork) => {
       return message;
     };
 
-    const message = formatEngagingLinkedInMessage(jobPosts, jobNetwork);
+    const message = truncateLinkedInCommentary(formatEngagingLinkedInMessage(jobPosts, jobNetwork));
 
     // Get a random image from the directory (or null if not available)
     const imagePath = getRandomImage();
@@ -353,52 +471,41 @@ module.exports.postJobNetworkPostsToLinkedIn = async (jobNetwork) => {
     // Create LinkedIn share with verified author URN
     const authorUrn = `urn:li:organization:${organizationId}`;
 
-    const url = "https://api.linkedin.com/rest/posts";
-
-    // Create different payload based on whether we have an image or not
-    const payload = {
-      author: authorUrn,
+    let postResult = await createLinkedInPost({
+      accessToken,
+      authorUrn,
       commentary: message,
-      visibility: "PUBLIC",
-      distribution: {
-        feedDistribution: "MAIN_FEED",
-        targetEntities: [],
-        thirdPartyDistributionChannels: []
-      },
-      ...(asset ? {
-        content: {
-          media: {
-            altText: "Job opportunities at the United Nations",
-            id: asset
-          }
-        }
-      } : {}),
-      lifecycleState: "PUBLISHED",
-      isReshareDisabledByAuthor: false
-    };
-
-    const response = await fetch(url, {
-      method: "POST",
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-        'X-Restli-Protocol-Version': '2.0.0',
-        'LinkedIn-Version': '20250101'
-      },
-      body: JSON.stringify(payload)
+      asset,
+      altText: "Job opportunities at the United Nations"
     });
 
-    if (response.status !== 201 && !response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      console.error('LinkedIn API Error Details:', {
-        status: response.status,
-        statusText: response.statusText,
-        error: errorData
+    // LinkedIn can reject media-backed posts even when upload succeeded, so retry text-only.
+    if (!postResult.ok && asset) {
+      console.warn('⚠️ LinkedIn image post failed, retrying as text-only post:', {
+        status: postResult.status,
+        statusText: postResult.statusText,
+        error: postResult.errorDetails
       });
-      throw new Error(`LinkedIn API error: ${errorData.message || response.statusText}`);
+
+      postResult = await createLinkedInPost({
+        accessToken,
+        authorUrn,
+        commentary: message,
+        asset: null,
+        altText: null
+      });
     }
 
-    const postId = response.headers.get('x-restli-id') || response.headers.get('X-RestLi-Id');
+    if (!postResult.ok) {
+      console.error('LinkedIn API Error Details:', {
+        status: postResult.status,
+        statusText: postResult.statusText,
+        error: postResult.errorDetails
+      });
+      throw new Error(`LinkedIn API error: ${postResult.errorMessage}`);
+    }
+
+    const postId = postResult.postId;
     const linkedinResponse = { id: postId };
     console.log("Successfully posted to LinkedIn:", linkedinResponse);
 
@@ -717,7 +824,7 @@ module.exports.postExpiringSoonJobPostsToLinkedIn = async () => {
       return message;
     };
 
-    const message = formatEngagingExpiringLinkedInMessage(jobPosts);
+    const message = truncateLinkedInCommentary(formatEngagingExpiringLinkedInMessage(jobPosts));
 
     // Get a random image from the directory (or null if not available)
     const imagePath = getRandomImage();
@@ -751,52 +858,41 @@ module.exports.postExpiringSoonJobPostsToLinkedIn = async () => {
     // Create LinkedIn share with verified author URN
     const authorUrn = `urn:li:organization:${organizationId}`;
 
-    const url = "https://api.linkedin.com/rest/posts";
-
-    // Create different payload based on whether we have an image or not
-    const payload = {
-      author: authorUrn,
+    let postResult = await createLinkedInPost({
+      accessToken,
+      authorUrn,
       commentary: message,
-      visibility: "PUBLIC",
-      distribution: {
-        feedDistribution: "MAIN_FEED",
-        targetEntities: [],
-        thirdPartyDistributionChannels: []
-      },
-      ...(asset ? {
-        content: {
-          media: {
-            altText: "Expiring UN job opportunities - apply now",
-            id: asset
-          }
-        }
-      } : {}),
-      lifecycleState: "PUBLISHED",
-      isReshareDisabledByAuthor: false
-    };
-
-    const response = await fetch(url, {
-      method: "POST",
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-        'X-Restli-Protocol-Version': '2.0.0',
-        'LinkedIn-Version': '20250101'
-      },
-      body: JSON.stringify(payload)
+      asset,
+      altText: "Expiring UN job opportunities - apply now"
     });
 
-    if (response.status !== 201 && !response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      console.error('LinkedIn API Error Details:', {
-        status: response.status,
-        statusText: response.statusText,
-        error: errorData
+    // LinkedIn can reject media-backed posts even when upload succeeded, so retry text-only.
+    if (!postResult.ok && asset) {
+      console.warn('⚠️ LinkedIn image post failed for expiring jobs, retrying as text-only post:', {
+        status: postResult.status,
+        statusText: postResult.statusText,
+        error: postResult.errorDetails
       });
-      throw new Error(`LinkedIn API error: ${errorData.message || response.statusText}`);
+
+      postResult = await createLinkedInPost({
+        accessToken,
+        authorUrn,
+        commentary: message,
+        asset: null,
+        altText: null
+      });
     }
 
-    const postId = response.headers.get('x-restli-id') || response.headers.get('X-RestLi-Id');
+    if (!postResult.ok) {
+      console.error('LinkedIn API Error Details:', {
+        status: postResult.status,
+        statusText: postResult.statusText,
+        error: postResult.errorDetails
+      });
+      throw new Error(`LinkedIn API error: ${postResult.errorMessage}`);
+    }
+
+    const postId = postResult.postId;
     const linkedinResponse = { id: postId };
     console.log("Successfully posted to LinkedIn:", linkedinResponse);
 
