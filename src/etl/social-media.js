@@ -475,8 +475,38 @@ module.exports.postJobNetworkPostsToLinkedIn = async (jobNetwork) => {
       accessToken,
       authorUrn,
       commentary: message,
+<<<<<<< HEAD
       asset,
       altText: "Job opportunities at the United Nations"
+=======
+      visibility: "PUBLIC",
+      distribution: {
+        feedDistribution: "MAIN_FEED",
+        targetEntities: [],
+        thirdPartyDistributionChannels: []
+      },
+      ...(asset ? {
+        content: {
+          media: {
+            title: "Job opportunities at the United Nations",
+            id: asset
+          }
+        }
+      } : {}),
+      lifecycleState: "PUBLISHED",
+      isReshareDisabledByAuthor: false
+    };
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+        'X-Restli-Protocol-Version': '2.0.0',
+        'LinkedIn-Version': '20250101'
+      },
+      body: JSON.stringify(payload)
+>>>>>>> refs/remotes/origin/main
     });
 
     // LinkedIn can reject media-backed posts even when upload succeeded, so retry text-only.
@@ -862,8 +892,38 @@ module.exports.postExpiringSoonJobPostsToLinkedIn = async () => {
       accessToken,
       authorUrn,
       commentary: message,
+<<<<<<< HEAD
       asset,
       altText: "Expiring UN job opportunities - apply now"
+=======
+      visibility: "PUBLIC",
+      distribution: {
+        feedDistribution: "MAIN_FEED",
+        targetEntities: [],
+        thirdPartyDistributionChannels: []
+      },
+      ...(asset ? {
+        content: {
+          media: {
+            title: "Expiring UN job opportunities - apply now",
+            id: asset
+          }
+        }
+      } : {}),
+      lifecycleState: "PUBLISHED",
+      isReshareDisabledByAuthor: false
+    };
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+        'X-Restli-Protocol-Version': '2.0.0',
+        'LinkedIn-Version': '20250101'
+      },
+      body: JSON.stringify(payload)
+>>>>>>> refs/remotes/origin/main
     });
 
     // LinkedIn can reject media-backed posts even when upload succeeded, so retry text-only.
