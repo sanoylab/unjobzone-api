@@ -1,5 +1,24 @@
 const jwt = require("jsonwebtoken");
+const crypto = require("crypto");
 require("dotenv").config();
+
+// Helper function for timing-safe string comparison
+const timingSafeEqual = (a, b) => {
+  if (!a || !b) return false;
+  
+  // Ensure both strings are the same length for crypto.timingSafeEqual
+  const bufA = Buffer.from(a);
+  const bufB = Buffer.from(b);
+  
+  // If lengths differ, compare against a dummy buffer to maintain constant time
+  if (bufA.length !== bufB.length) {
+    // Still perform a comparison to prevent timing attacks on length
+    crypto.timingSafeEqual(bufA, Buffer.alloc(bufA.length));
+    return false;
+  }
+  
+  return crypto.timingSafeEqual(bufA, bufB);
+};
 
 // Main authentication middleware - UNCHANGED to maintain backward compatibility
 module.exports.auth = async (req, res, next) => {
@@ -11,15 +30,32 @@ module.exports.auth = async (req, res, next) => {
       return res.status(401).send("A token is required for authentication");
     }
     
-    if(token == process.env.ACCESS_TOKEN_SECRET || token == process.env.TEMPO_ACCESS_TOKEN_SECRET){
-        console.log("Authentication success!")
+    // Use timing-safe comparison to prevent timing attacks
+    const validAccessToken = timingSafeEqual(token, process.env.ACCESS_TOKEN_SECRET);
+    const validTempoToken = timingSafeEqual(token, process.env.TEMPO_ACCESS_TOKEN_SECRET);
+    
+    if(validAccessToken || validTempoToken){
+        // Log authentication success for security auditing
+        // Note: In production, consider using a dedicated security logging system
+        console.log("Authentication success!", {
+          timestamp: new Date().toISOString(),
+          // Only log hashed IP for privacy compliance
+          ipHash: req.ip ? crypto.createHash('sha256').update(req.ip).digest('hex').substring(0, 16) : 'unknown',
+          path: req.path
+        });
       next();
     } else {
         return res.status(401).send("Invalid Token");
     }
 
   } catch (e) {
-    res.send(e).status(500);
+    // Log error details for debugging but sanitize to avoid exposing sensitive data
+    console.error("Authentication error:", {
+      message: e.message,
+      type: e.constructor.name,
+      timestamp: new Date().toISOString()
+    });
+    res.status(500).send("Authentication error");
   }
 };
 
