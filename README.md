@@ -12,6 +12,9 @@ PORT=3000
 
 # Sentry Configuration (Optional)
 SENTRY_DEBUG=true # Set to true to enable Sentry in development
+
+# ReliefWeb ETL
+RELIEFWEB_APPNAME=your-reliefweb-appname # Identifier for ReliefWeb v2 API (public, not a secret)
 ```
 
 ## Sentry Error Monitoring
@@ -69,6 +72,27 @@ The application now includes UNESCO job vacancy scraping from [careers.unesco.or
 UNESCO ETL runs as part of the main ETL schedule:
 - **6:00 AM** - Morning ETL run
 - **6:00 PM** - Evening ETL run
+
+## ReliefWeb ETL Integration
+
+A 13th data source ingests humanitarian-sector postings from the public
+[ReliefWeb v2 jobs API](https://api.reliefweb.int/v2/jobs).
+
+### Features
+- Pulls up to 1,000 most-recent postings per run (`preset=latest`, `profile=full`).
+- Transforms into the existing `job_vacancies` schema — no schema changes.
+- Best-effort mapping of ReliefWeb `career_categories` → UN job-network names so
+  ingested rows participate in the existing hourly social-media posting crons.
+- Reuses existing helpers (`acquireETLLock`, `logETLStatus`, `upsertJobVacancy`,
+  `cleanupExpiredAndDuplicateJobs`); ETL dashboard surfaces a `RELIEFWEB` row.
+
+### Schedule
+ReliefWeb runs on its own daily standalone cron, separate from `runEtl()`:
+- **5:00 AM** - Daily ReliefWeb ingestion (server timezone)
+
+### Configuration
+- `RELIEFWEB_APPNAME` — required env var; the public app identifier issued by ReliefWeb.
+- Run ad hoc: `npm run run-reliefweb-etl`
 
 ## Database Cleanup Process
 
