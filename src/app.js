@@ -25,6 +25,7 @@ const { fetchAndProcessIcaoJobVacancies } = require("./etl/etl-icao");
 const { fetchAndProcessUnicefJobVacancies } = require("./etl/etl-unicef");
 const { fetchAndProcessUnopsJobVacancies } = require("./etl/etl-unops");
 const { fetchAndProcessUnescoJobVacancies } = require("./etl/etl-unesco");
+const { fetchAndProcessReliefwebJobVacancies } = require("./etl/etl-reliefweb");
 const { removeDuplicateJobVacancies } = require("./etl/shared");
 
 // Import social media functions
@@ -415,11 +416,120 @@ cron.schedule("0 6 * * *", async() => {
   await runEtl();
 });
 
-// 6:00 PM - Evening run to catch business day updates  
+// 6:00 PM - Evening run to catch business day updates
 cron.schedule("0 18 * * *", async() => {
   console.log("Running evening ETL process...", new Date());
   await runEtl();
 });
+
+// 5:00 AM - Daily ReliefWeb ingestion (standalone, NOT inside runEtl())
+cron.schedule("0 5 * * *", async () => {
+  await runReliefwebEtl();
+});
+
+const runReliefwebEtl = async () => {
+  const ORG = "RELIEFWEB";
+  const startTime = new Date();
+  console.log("\n🌐 ==========================================");
+  console.log("🌐 Running ReliefWeb daily ETL...", startTime);
+  console.log("============================================");
+
+  const {
+    acquireETLLock,
+    releaseETLLock,
+    logETLStatus,
+    getJobCount,
+    cleanupExpiredAndDuplicateJobs,
+  } = require("./etl/shared");
+
+  const lockResult = await acquireETLLock(ORG);
+  if (!lockResult.acquired) {
+    console.log(`⏳ Skipping ReliefWeb: ${lockResult.reason}`);
+    await logETLStatus(ORG, "failed", {
+      startTime,
+      endTime: new Date(),
+      durationSeconds: 0,
+      errorMessage: lockResult.reason,
+    });
+    return;
+  }
+
+  try {
+    await logETLStatus(ORG, "running", {
+      startTime,
+      processedCount: 0,
+      successCount: 0,
+      errorCount: 0,
+    });
+
+    const result = await fetchAndProcessReliefwebJobVacancies();
+    const endTime = new Date();
+    const durationSeconds = Math.round((endTime - startTime) / 1000);
+    const jobsInDb = await getJobCount(ORG);
+
+    if (result.success) {
+      await logETLStatus(ORG, "success", {
+        startTime,
+        endTime,
+        durationSeconds,
+        processedCount: result.processedCount || 0,
+        successCount: result.successCount || 0,
+        errorCount: result.errorCount || 0,
+        jobsInDb,
+      });
+      console.log(
+        `✅ ReliefWeb ETL completed: ${result.successCount} jobs upserted, ${result.errorCount} errors`
+      );
+
+      try {
+        const redisClient = require("./redisClient");
+        const cacheKeys = await redisClient.keys("jobs:*");
+        if (cacheKeys.length > 0) {
+          await redisClient.del(cacheKeys);
+          console.log(
+            `🔄 ReliefWeb: Cleared ${cacheKeys.length} cached job entries from Redis`
+          );
+        }
+      } catch (redisError) {
+        console.warn(
+          `⚠️  ReliefWeb: Could not clear Redis cache: ${redisError.message}`
+        );
+      }
+
+      try {
+        await cleanupExpiredAndDuplicateJobs();
+      } catch (cleanupError) {
+        console.warn(
+          `⚠️  ReliefWeb: Database cleanup failed: ${cleanupError.message}`
+        );
+      }
+    } else {
+      await logETLStatus(ORG, "failed", {
+        startTime,
+        endTime,
+        durationSeconds,
+        processedCount: result.processedCount || 0,
+        successCount: result.successCount || 0,
+        errorCount: result.errorCount || 0,
+        errorMessage: result.error,
+        jobsInDb,
+      });
+      console.error(`❌ ReliefWeb ETL failed: ${result.error}`);
+    }
+  } catch (error) {
+    const endTime = new Date();
+    const durationSeconds = Math.round((endTime - startTime) / 1000);
+    await logETLStatus(ORG, "failed", {
+      startTime,
+      endTime,
+      durationSeconds,
+      errorMessage: `Critical error: ${error.message}`,
+    });
+    console.error(`❌ ReliefWeb ETL crashed: ${error.message}`);
+  } finally {
+    await releaseETLLock(ORG);
+  }
+};
 
 // Returns true if the error indicates an expired/invalid LinkedIn access token
 const isLinkedInTokenExpired = (error) => {

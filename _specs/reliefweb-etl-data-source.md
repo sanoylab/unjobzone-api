@@ -355,18 +355,18 @@ columns as follows:
 
 1. **Daily slot.** Is 5:00 AM server time the right slot, or should
    ReliefWeb piggy-back on the 6 AM `runEtl()` (added to the `etlJobs`
-   array)? Standalone is recommended for isolation; flag for confirmation.
+   array)? Standalone is recommended for isolation; flag for confirmation. OK. STANDALONE
 2. **Redis flush.** Should a successful ReliefWeb run also re-trigger
    social-media posting flows? Default: no — only ETL ingestion changes,
-   social-media schedules continue independently.
+   social-media schedules continue independently. No
 3. **Job-network categories.** Do we want to map ReliefWeb's
    `career_categories` to UN job-network names (so ReliefWeb postings
    participate in the hourly social-media posts) or leave them as-is? The
-   spec assumes leave-as-is; revisit if/when we expand social posting.
+   spec assumes leave-as-is; revisit if/when we expand social posting. If possible, YES.
 4. **ReliefWeb rate-limit headers.** Does the public endpoint expose
    `X-RateLimit-*` headers we should respect? If so, treat 429 as an
    abort-and-retry-tomorrow rather than retrying within the same run.
-   Default behavior (abort on 4xx) is acceptable until evidence otherwise.
+   Default behavior (abort on 4xx) is acceptable until evidence otherwise. Okay.
 5. **Org-table insert.** Confirm whether `organization` has a unique
    constraint on `name` / `code`. If not, the spec's idempotent insert
-   becomes a one-time manual seed; no schema change either way.
+   becomes a one-time manual seed; no schema change either way. OK
