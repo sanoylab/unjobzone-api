@@ -294,10 +294,11 @@ const upsertJobVacancy = async (client, jobData, organizationName) => {
     const upsertQuery = `
       INSERT INTO job_vacancies (
         job_id, language, category_code, job_title, job_code_title, job_description,
-        job_family_code, job_level, duty_station, recruitment_type, start_date, end_date, 
-        dept, total_count, jn, jf, jc, jl, created, data_source, organization_id, apply_link
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
-      ON CONFLICT (job_id, data_source, organization_id) 
+        job_family_code, job_level, duty_station, recruitment_type, start_date, end_date,
+        dept, total_count, jn, jf, jc, jl, created, data_source, organization_id, apply_link,
+        source_logo_url
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
+      ON CONFLICT (job_id, data_source, organization_id)
       DO UPDATE SET
         language = EXCLUDED.language,
         category_code = EXCLUDED.category_code,
@@ -317,8 +318,9 @@ const upsertJobVacancy = async (client, jobData, organizationName) => {
         jc = EXCLUDED.jc,
         jl = EXCLUDED.jl,
         apply_link = EXCLUDED.apply_link,
+        source_logo_url = EXCLUDED.source_logo_url,
         created = NOW()
-      RETURNING id, job_title, 
+      RETURNING id, job_title,
       CASE WHEN xmax = 0 THEN 'inserted' ELSE 'updated' END as action;
     `;
 
@@ -344,7 +346,8 @@ const upsertJobVacancy = async (client, jobData, organizationName) => {
       new Date(),
       jobData.data_source,
       jobData.organization_id,
-      jobData.apply_link || ''
+      jobData.apply_link || '',
+      jobData.source_logo_url || null,
     ]);
 
     return { 

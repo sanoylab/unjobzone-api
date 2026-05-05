@@ -36,8 +36,14 @@ CREATE INDEX IF NOT EXISTS idx_etl_status_dashboard
     ON etl_status(created_at DESC, organization_name, status) 
     INCLUDE (jobs_in_db, duration_seconds);
 
+-- Per-job logo URL for sources that supply their own brand image (e.g. ReliefWeb).
+-- When NULL, the frontend falls back to the organization logo (or a source-specific
+-- default for ReliefWeb rows).
+ALTER TABLE job_vacancies
+    ADD COLUMN IF NOT EXISTS source_logo_url TEXT;
+
 -- Add indexes to existing job_vacancies table for better performance
-CREATE INDEX IF NOT EXISTS idx_job_vacancies_data_source 
+CREATE INDEX IF NOT EXISTS idx_job_vacancies_data_source
     ON job_vacancies(data_source);
 
 CREATE INDEX IF NOT EXISTS idx_job_vacancies_created 

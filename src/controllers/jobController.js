@@ -42,6 +42,7 @@ module.exports.getAll = async (req, res) => {
         jv.created, 
         jv.data_source,
         jv.apply_link,
+        jv.source_logo_url,
         org.logo,
         org.short_name,
         org.long_name
@@ -116,6 +117,7 @@ module.exports.getById = async (req, res) => {
         jv.created, 
         jv.data_source,
         jv.apply_link,
+        jv.source_logo_url,
         org.logo,
         org.short_name,
         org.long_name
@@ -174,14 +176,15 @@ module.exports.getFilteredJobs = async (req, res) => {
         jv.jl, 
         jv.created, 
         jv.data_source,
+        jv.source_logo_url,
         org.logo,
         org.short_name,
         org.long_name
-      FROM 
+      FROM
         job_vacancies jv
-      LEFT JOIN 
+      LEFT JOIN
         organization org ON jv.organization_id = org.id
-      WHERE 
+      WHERE
         1=1
     `;
 

@@ -104,8 +104,14 @@ const transformJob = (item) => {
   const themeName = fields?.theme?.[0]?.name || "";
   const experienceName = fields?.experience?.[0]?.name || "";
   const typeName = fields?.type?.[0]?.name || "";
-  const sourceName =
-    fields?.source?.[0]?.name || fields?.source?.[0]?.shortname || "ReliefWeb";
+  const source0 = fields?.source?.[0] || {};
+  const sourceName = source0.name || source0.shortname || "ReliefWeb";
+
+  // Pick the best available logo URL from the source. ReliefWeb sometimes returns
+  // a `logo` URL on the source object and sometimes only `homepage` — we want a
+  // direct image URL so only `logo` is used. Empty string → null so we fall back.
+  const rawLogo = typeof source0.logo === "string" ? source0.logo.trim() : "";
+  const sourceLogoUrl = rawLogo && /^https?:\/\//i.test(rawLogo) ? rawLogo : null;
 
   const description = stripControlChars(
     fields["body-html"] || fields.body || ""
@@ -134,6 +140,7 @@ const transformJob = (item) => {
     jl: experienceName,
     data_source: DATA_SOURCE,
     apply_link: applyLink,
+    source_logo_url: sourceLogoUrl,
   };
 };
 
