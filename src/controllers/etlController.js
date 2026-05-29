@@ -749,11 +749,8 @@ const diagnoseLinkedInDeployment = async (req, res) => {
     // 3. Check Database Connection and Job Data
     console.log('3️⃣ Checking database...');
     try {
-      const { Pool } = require('pg');
-      const { credentials } = require('../util/db');
-      const pool = new Pool(credentials);
-      
-      // Test basic connection
+      // Use the file-level `pool` — the previous version `new Pool(credentials)`
+      // every call and never .end()'d it, leaking connections.
       const result = await pool.query('SELECT COUNT(*) as count FROM job_vacancies LIMIT 1');
       diagnostics.database.totalJobs = parseInt(result.rows[0].count);
       
