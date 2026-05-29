@@ -1,5 +1,5 @@
 const { pool } = require("../util/db");
-const redisClient = require('../redisClient');
+const cache = require("../util/cache");
 
 // Whitelist of column names that getFilteredJobs is allowed to filter on.
 // Any other key in req.query is silently ignored. Keeps caller-controlled
@@ -20,6 +20,24 @@ const FILTERABLE_COLUMNS = new Set([
 function clampPage(raw)  { return Math.max(1, parseInt(raw, 10) || 1); }
 function clampSize(raw)  { return Math.min(1000, Math.max(1, parseInt(raw, 10) || 10)); }
 
+// Cache TTLs (seconds). Anything under jobs:* is auto-flushed by the ETL
+// after each successful agency run, so these can be longer than the data
+// "really" stays fresh — the ETL invalidation is what drives correctness.
+const TTL_JOB_ROW       = 3600;   // 1 h — single job & paginated jobs lists
+const TTL_AGGREGATION   = 3600;   // 1 h — categories, organizations, duty stations
+const TTL_FILTERED      = 600;    // 10 min — filtered queries (long-tail of unique keys)
+
+// Stable serialization of req.query for cache keys — sorted by name so
+// ?a=1&b=2 and ?b=2&a=1 collide on the same cache entry.
+function stableQueryString(query) {
+  const params = new URLSearchParams();
+  Object.keys(query).sort().forEach((k) => {
+    const v = query[k];
+    if (v !== undefined && v !== null && String(v).trim() !== '') params.set(k, v);
+  });
+  return params.toString();
+}
+
 module.exports.getAll = async (req, res) => {
   try {
     const page = clampPage(req.query.page);
@@ -27,10 +45,8 @@ module.exports.getAll = async (req, res) => {
     const offset = (page - 1) * size;
     const cacheKey = `jobs:all:${page}:${size}`;
 
-    const cached = await redisClient.get(cacheKey);
-    if (cached) {
-      return res.json(JSON.parse(cached));
-    }
+    const cached = await cache.get(cacheKey);
+    if (cached) return res.json(cached);
 
     const query = `
       SELECT
@@ -55,9 +71,7 @@ module.exports.getAll = async (req, res) => {
     const totalRecords = parseInt(countResult.rows[0].count, 10);
     const payload = { success: true, totalRecords, timestamp: new Date(), data: result.rows };
 
-    // 1 h TTL — the ETL flushes jobs:* on each successful agency run.
-    await redisClient.set(cacheKey, JSON.stringify(payload), 'EX', 3600);
-
+    await cache.set(cacheKey, payload, TTL_JOB_ROW);
     res.status(200).json(payload);
   } catch (err) {
     console.error('[jobs.getAll]', err);
@@ -73,10 +87,8 @@ module.exports.getById = async (req, res) => {
     }
 
     const cacheKey = `jobs:${id}`;
-    const cached = await redisClient.get(cacheKey);
-    if (cached) {
-      return res.json(JSON.parse(cached));
-    }
+    const cached = await cache.get(cacheKey);
+    if (cached) return res.json(cached);
 
     const query = `
       SELECT
@@ -94,10 +106,9 @@ module.exports.getById = async (req, res) => {
     `;
 
     const result = await pool.query(query, [id]);
-
     const payload = { success: true, timestamp: new Date(), data: result.rows };
-    await redisClient.set(cacheKey, JSON.stringify(payload), 'EX', 3600);
 
+    await cache.set(cacheKey, payload, TTL_JOB_ROW);
     res.status(200).json(payload);
   } catch (err) {
     console.error('[jobs.getById]', err);
@@ -107,51 +118,31 @@ module.exports.getById = async (req, res) => {
 
 module.exports.getFilteredJobs = async (req, res) => {
   try {
-    // Use LEFT JOIN to include all job_vacancies even if organization is missing
+    const cacheKey = `jobs:filter:${stableQueryString(req.query)}`;
+    const cached = await cache.get(cacheKey);
+    if (cached) return res.json(cached);
+
     let baseQuery = `
       SELECT
-        jv.id, 
-        jv.job_id, 
-        jv.language, 
-        jv.category_code, 
-        jv.job_title, 
-        jv.job_code_title, 
-        jv.job_description, 
-        jv.job_family_code, 
-        jv.job_level, 
-        jv.duty_station, 
-        jv.recruitment_type, 
-        jv.start_date, 
-        jv.end_date, 
-        jv.dept, 
-        jv.apply_link,
-        jv.total_count, 
-        jv.jn, 
-        jv.jf, 
-        jv.jc, 
-        jv.jl, 
-        jv.created, 
-        jv.data_source,
-        jv.source_logo_url,
-        org.logo,
-        org.short_name,
-        org.long_name
-      FROM
-        job_vacancies jv
-      LEFT JOIN
-        organization org ON jv.organization_id = org.id
-      WHERE
-        1=1
+        jv.id, jv.job_id, jv.language, jv.category_code, jv.job_title,
+        jv.job_code_title, jv.job_description, jv.job_family_code,
+        jv.job_level, jv.duty_station, jv.recruitment_type,
+        jv.start_date, jv.end_date, jv.dept, jv.apply_link,
+        jv.total_count, jv.jn, jv.jf, jv.jc, jv.jl, jv.created,
+        jv.data_source, jv.source_logo_url,
+        org.logo, org.short_name, org.long_name
+      FROM job_vacancies jv
+      LEFT JOIN organization org ON jv.organization_id = org.id
+      WHERE 1=1
     `;
 
-    // Build the count query with the same LEFT JOIN
     let countQuery = `
       SELECT COUNT(jv.id)
       FROM job_vacancies jv
       LEFT JOIN organization org ON jv.organization_id = org.id
       WHERE 1=1
     `;
-    
+
     const queryParams = [];
 
     // Build the dynamic WHERE — but only for whitelisted column names so
@@ -183,143 +174,84 @@ module.exports.getFilteredJobs = async (req, res) => {
     ]);
 
     const totalRecords = parseInt(countResult.rows[0].count, 10);
+    const payload = { success: true, timestamp: new Date(), totalRecords, data: result.rows };
 
-    res.status(200).json({
-      success: true,
-      timestamp: new Date(),
-      totalRecords,
-      data: result.rows,
-    });
+    await cache.set(cacheKey, payload, TTL_FILTERED);
+    res.status(200).json(payload);
   } catch (err) {
     console.error('[jobs.getFilteredJobs]', err);
     res.status(500).json({ success: false, message: 'Failed to load jobs' });
   }
 };
 
-module.exports.getAllJobCategories = async (req, res) => {
+// — Small helper for the five aggregation endpoints below. Each does the
+//   same thing: cache-check → run a fixed query → cache → respond. —
+async function cachedAggregation(cacheKey, sql, res, label) {
   try {
-    let query = `
-      SELECT jn, COUNT(*) as total
-      FROM job_vacancies
-      WHERE jn IS NOT NULL AND jn <> ''
-      GROUP BY jn
-      ORDER BY jn;
-    `;
-    let result = null;
-    try {
-      result = await pool.query(query);
-      console.log(result);
-      console.log(result.rows);
-    } catch (e) {
-      console.log(e);
-    }
+    const cached = await cache.get(cacheKey);
+    if (cached) return res.json(cached);
 
-    res.status(200).json({ success: true, timestamp: new Date(), data: result.rows });
-  } catch (e) {
-    res.status(400).json({ success: false, message: e.message });
+    const result = await pool.query(sql);
+    const payload = { success: true, timestamp: new Date(), data: result.rows };
+
+    await cache.set(cacheKey, payload, TTL_AGGREGATION);
+    res.status(200).json(payload);
+  } catch (err) {
+    console.error(`[${label}]`, err);
+    res.status(500).json({ success: false, message: `Failed to load ${label}` });
   }
-};
+}
 
-module.exports.getAllJobFunctionCategories = async (req, res) => {
-  try {
-    let query = `
-      SELECT jf, COUNT(*) as total
-      FROM job_vacancies
-      WHERE jf IS NOT NULL AND jf <> ''
-      GROUP BY jf
-      ORDER BY jf;
-    `;
-    let result = null;
-    try {
-      result = await pool.query(query);
-      console.log(result);
-      console.log(result.rows);
-    } catch (e) {
-      console.log(e);
-    }
+module.exports.getAllJobCategories = (req, res) =>
+  cachedAggregation(
+    'jobs:categories:list',
+    `SELECT jn, COUNT(*) as total
+     FROM job_vacancies
+     WHERE jn IS NOT NULL AND jn <> ''
+     GROUP BY jn
+     ORDER BY jn;`,
+    res, 'jobs.categories'
+  );
 
-    res.status(200).json({ success: true, timestamp: new Date(), data: result.rows });
-  } catch (e) {
-    res.status(400).json({ success: false, message: e.message });
-  }
-};
+module.exports.getAllJobFunctionCategories = (req, res) =>
+  cachedAggregation(
+    'jobs:categories:job_function:list',
+    `SELECT jf, COUNT(*) as total
+     FROM job_vacancies
+     WHERE jf IS NOT NULL AND jf <> ''
+     GROUP BY jf
+     ORDER BY jf;`,
+    res, 'jobs.function_categories'
+  );
 
-module.exports.getAllJobOrganizations = async (req, res) => {
-  try {
-    let query = `
-      SELECT 
-        jv.dept, 
-        org.description,
-        org.logo, 
-        COUNT(*) as total
-      FROM 
-        job_vacancies jv
-      INNER JOIN 
-        organization org ON jv.organization_id = org.id
-      WHERE 
-        jv.dept IS NOT NULL AND jv.dept <> ''
-      GROUP BY 
-        jv.dept, org.logo, org.description
-      ORDER BY 
-        total DESC;
-    `;
-    let result = null;
-    try {
-      result = await pool.query(query);
-      console.log(result);
-      console.log(result.rows);
-    } catch (e) {
-      console.log(e);
-    }
+module.exports.getAllJobOrganizations = (req, res) =>
+  cachedAggregation(
+    'jobs:organizations:list',
+    `SELECT jv.dept, org.description, org.logo, COUNT(*) as total
+     FROM job_vacancies jv
+     INNER JOIN organization org ON jv.organization_id = org.id
+     WHERE jv.dept IS NOT NULL AND jv.dept <> ''
+     GROUP BY jv.dept, org.logo, org.description
+     ORDER BY total DESC;`,
+    res, 'jobs.organizations'
+  );
 
-    res.status(200).json({ success: true, timestamp: new Date(), data: result.rows });
-  } catch (e) {
-    res.status(400).json({ success: false, message: e.message });
-  }
-};
+module.exports.getLogoJobOrganizations = (req, res) =>
+  cachedAggregation(
+    'jobs:organizations:logo:list',
+    `SELECT DISTINCT org.logo, org.name
+     FROM organization org
+     INNER JOIN job_vacancies jv ON org.id = jv.organization_id;`,
+    res, 'jobs.logo_organizations'
+  );
 
-module.exports.getLogoJobOrganizations = async (req, res) => {
-  try {
-    let query = `
-      SELECT DISTINCT org.logo, org.name
-      FROM organization org 
-      INNER JOIN job_vacancies jv ON org.id = jv.organization_id
-    `;
-    let result = null;
-    try {
-      result = await pool.query(query);
-      console.log(result);
-      console.log(result.rows);
-    } catch (e) {
-      console.log(e);
-    }
-
-    res.status(200).json({ success: true, timestamp: new Date(), data: result.rows });
-  } catch (e) {
-    res.status(400).json({ success: false, message: e.message });
-  }
-};
-
-module.exports.getAllDutyStations = async (req, res) => {
-  try {
-    let query = `
-      SELECT duty_station, COUNT(*) as total
-      FROM job_vacancies
-      WHERE duty_station IS NOT NULL AND duty_station <> ''
-      GROUP BY duty_station
-      ORDER BY total DESC;
-    `;
-    let result = null;
-    try {
-      result = await pool.query(query);
-      console.log(result);
-      console.log(result.rows);
-    } catch (e) {
-      console.log(e);
-    }
-
-    res.status(200).json({ success: true, timestamp: new Date(), data: result.rows });
-  } catch (e) {
-    res.status(400).json({ success: false, message: e.message });
-  }
-};
+module.exports.getAllDutyStations = (req, res) =>
+  cachedAggregation(
+    'jobs:duty_stations:list',
+    `SELECT duty_station, COUNT(*) as total
+     FROM job_vacancies
+     WHERE duty_station IS NOT NULL AND duty_station <> ''
+     GROUP BY duty_station
+     ORDER BY total DESC;`,
+    res, 'jobs.duty_stations'
+  );
