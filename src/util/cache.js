@@ -33,4 +33,22 @@ async function delByPrefix(prefix) {
   }
 }
 
-module.exports = { get, set, delByPrefix };
+/*
+  Set HTTP Cache-Control on a response so the browser HTTP cache (and any
+  reverse proxy / CDN configured to honor origin headers) can return the
+  next call without touching the API at all.
+
+  - maxAge          how long the response is "fresh" (served from cache w/o
+                    revalidation)
+  - staleWhile…     after maxAge, browser may still serve the cached copy
+                    while it refetches in the background — perfect for
+                    listings where slightly-stale data is fine
+*/
+function httpCache(res, maxAgeSeconds, staleWhileRevalidate = maxAgeSeconds * 4) {
+  res.set(
+    'Cache-Control',
+    `public, max-age=${maxAgeSeconds}, stale-while-revalidate=${staleWhileRevalidate}`
+  );
+}
+
+module.exports = { get, set, delByPrefix, httpCache };

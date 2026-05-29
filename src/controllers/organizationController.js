@@ -40,6 +40,7 @@ module.exports.getAll = async (req, res) => {
     };
 
     await cache.set(cacheKey, payload, TTL);
+    cache.httpCache(res, 300);
     res.status(200).json(payload);
   } catch (err) {
     console.error('[organization.getAll]', err);
@@ -68,6 +69,7 @@ module.exports.getById = async (req, res) => {
     const payload = { success: true, timestamp: new Date(), data: result.rows };
 
     await cache.set(cacheKey, payload, TTL);
+    cache.httpCache(res, 600);
     res.status(200).json(payload);
   } catch (err) {
     console.error('[organization.getById]', err);
