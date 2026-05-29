@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const path = require("path");
-const { auth, optionalAuth, rateLimiter } = require("../middleware/auth");
+const { auth, rateLimiter } = require("../middleware/auth");
 const {
   getDashboard,
   getAllStatus,
