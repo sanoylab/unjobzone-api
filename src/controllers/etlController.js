@@ -426,29 +426,34 @@ module.exports.triggerETL = async (req, res) => {
 module.exports.clearCache = async (req, res) => {
   try {
     console.log(`Cache clear requested by user ${req.user?.id || 'anonymous'}`);
-    
+
     const redisClient = require('../redisClient');
-    
-    // Get all job-related cache keys
-    const cacheKeys = await redisClient.keys('jobs:*');
-    
-    if (cacheKeys.length === 0) {
-      return sendResponse(res, 200, true, { 
-        clearedKeys: 0, 
-        message: 'No cached entries found' 
+
+    // Gather every key we own — controllers cache under jobs:*, orgs:*,
+    // and blogs:*. Previously this only flushed jobs:*, so blog/org
+    // entries had to wait out their TTL.
+    const allKeys = [];
+    for (const prefix of ['jobs:*', 'orgs:*', 'blogs:*']) {
+      const keys = await redisClient.keys(prefix);
+      if (keys.length) allKeys.push(...keys);
+    }
+
+    if (allKeys.length === 0) {
+      return sendResponse(res, 200, true, {
+        clearedKeys: 0,
+        message: 'No cached entries found'
       }, 'Cache is already clean');
     }
-    
-    // Delete all job-related cache keys
-    const clearedCount = await redisClient.del(cacheKeys);
-    
-    console.log(`✅ Cleared ${clearedCount} job cache entries`);
-    
-    sendResponse(res, 200, true, { 
+
+    const clearedCount = await redisClient.del(allKeys);
+
+    console.log(`✅ Cleared ${clearedCount} cache entries across jobs/orgs/blogs`);
+
+    sendResponse(res, 200, true, {
       clearedKeys: clearedCount,
-      keys: cacheKeys,
+      keys: allKeys,
       message: 'Cache cleared successfully'
-    }, `Cleared ${clearedCount} cached job entries`);
+    }, `Cleared ${clearedCount} cached entries`);
     
   } catch (error) {
     console.error('Error clearing cache:', error);
