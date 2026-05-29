@@ -16,12 +16,10 @@ Sentry.init({
 
   // Additional integrations
   integrations: [
-    // Add profiling integration
     nodeProfilingIntegration(),
-    // Enable automatic span creation for database queries
-    Sentry.mongoIntegration(),
+    // mongoIntegration removed — this app uses Postgres exclusively, so the
+    // Mongo integration was instrumenting calls that never happen.
     Sentry.postgresIntegration(),
-    // Enable automatic span creation for HTTP requests
     Sentry.httpIntegration({ tracing: true }),
   ],
 

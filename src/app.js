@@ -48,6 +48,10 @@ const Sentry = require("@sentry/node");
 const router = require("./routers/index");
 const app = express();
 
+// Skip Express's "X-Powered-By: Express" header — minor information leak
+// and a tiny byte saving on every response.
+app.disable("x-powered-by");
+
 app.use(cors());
 app.use(express.json());
 
@@ -130,6 +134,11 @@ async function ensureSchema() {
     //   has to re-compute the tsvector for every row on every query.
     `CREATE INDEX IF NOT EXISTS idx_job_vacancies_job_title_tsv
        ON job_vacancies USING GIN (to_tsvector('english', job_title));`,
+
+    // — Refresh planner stats so the new indexes are immediately considered
+    //   on the first query. Auto-ANALYZE would catch up eventually but
+    //   right after CREATE INDEX is the moment we want the planner to know.
+    `ANALYZE job_vacancies;`,
   ];
 
   for (const sql of statements) {
