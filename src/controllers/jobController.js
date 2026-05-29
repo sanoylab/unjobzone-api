@@ -259,9 +259,14 @@ module.exports.getLogoJobOrganizations = (req, res) =>
 module.exports.getAllDutyStations = (req, res) =>
   cachedAggregation(
     'jobs:duty_stations:list',
+    // Only surface duty stations that have at least one CURRENT opening —
+    // non-expired (end_date today or later) or open-ended (no end_date).
+    // Keeps the homepage dropdown and /duty-stations page free of stations
+    // whose vacancies have all closed.
     `SELECT duty_station, COUNT(*) as total
      FROM job_vacancies
      WHERE duty_station IS NOT NULL AND duty_station <> ''
+       AND (end_date IS NULL OR end_date >= CURRENT_DATE)
      GROUP BY duty_station
      ORDER BY total DESC;`,
     res, 'jobs.duty_stations'
