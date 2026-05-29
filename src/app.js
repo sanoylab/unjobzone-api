@@ -668,3 +668,38 @@ cron.schedule("0 20 * * *", async () => {
 // cron.schedule("0 0 * * 0", async () => {
 //   await generateJobRelatedBlogPost();
 // });
+
+// — Render free-tier keep-warm —
+// Render spins free web services down after 15 min with no inbound HTTP
+// traffic. A self-ping every 10 minutes resets that timer, so first-time
+// visitors don't pay the ~30 s cold-start. The cron lives in-process, so
+// it only runs while the service is already awake — i.e. it keeps a
+// running dyno running. If the dyno does sleep (crash / cold deploy),
+// the first real visitor still pays the cold start once, and the cron
+// takes over from there.
+//
+// SELF_URL preference order:
+//   1. RENDER_EXTERNAL_URL — set automatically by Render on every deploy
+//   2. Hardcoded production URL — used if anyone runs this elsewhere
+//   3. Skip — local dev, no public URL, no need to keep-warm
+if (process.env.NODE_ENV !== "test") {
+  const axios = require("axios");
+  const SELF_URL =
+    process.env.RENDER_EXTERNAL_URL ||
+    (process.env.NODE_ENV === "production"
+      ? "https://unjobzone-api.onrender.com"
+      : null);
+
+  if (SELF_URL) {
+    cron.schedule("*/10 * * * *", async () => {
+      try {
+        const res = await axios.get(`${SELF_URL}/api/v1`, { timeout: 8000 });
+        console.log(`[keep-warm] ${SELF_URL}/api/v1 → ${res.status}`);
+      } catch (err) {
+        // Non-fatal — next tick will retry. Log so we notice persistent failure.
+        console.warn(`[keep-warm] ping failed: ${err.message}`);
+      }
+    });
+    console.log(`⏰ Keep-warm cron registered (every 10 min → ${SELF_URL})`);
+  }
+}
