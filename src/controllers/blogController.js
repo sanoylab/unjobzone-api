@@ -4,7 +4,8 @@ const { credentials } = require("../util/db");
 const pool = new Pool(credentials);
 
 function clampPage(raw) { return Math.max(1, parseInt(raw, 10) || 1); }
-function clampSize(raw) { return Math.min(100, Math.max(1, parseInt(raw, 10) || 10)); }
+// Ceiling 1000 — Api.js fetches up to size=100 for blog lists; headroom.
+function clampSize(raw) { return Math.min(1000, Math.max(1, parseInt(raw, 10) || 10)); }
 
 module.exports.getAll = async (req, res) => {
   try {

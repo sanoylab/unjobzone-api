@@ -18,8 +18,10 @@ const FILTERABLE_COLUMNS = new Set([
 ]);
 
 // Bound pagination so a hostile client can't pull the whole table.
+// Ceiling is 1000 because Jobs.jsx + HomeHero.jsx fetch up to 500 rows
+// and then filter client-side — keep that working but cap the worst case.
 function clampPage(raw)  { return Math.max(1, parseInt(raw, 10) || 1); }
-function clampSize(raw)  { return Math.min(100, Math.max(1, parseInt(raw, 10) || 10)); }
+function clampSize(raw)  { return Math.min(1000, Math.max(1, parseInt(raw, 10) || 10)); }
 
 module.exports.getAll = async (req, res) => {
   try {
