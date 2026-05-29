@@ -48,10 +48,14 @@ module.exports.getAll = async (req, res) => {
     const cached = await cache.get(cacheKey);
     if (cached) return res.json(cached);
 
+    // Note: job_description is intentionally NOT selected — list views in
+    // the SPA never render it (it's HTML, often 5–50 KB per row), only
+    // JobDetail.jsx does via getById. Empty-string fallback preserves the
+    // response shape for any other consumer.
     const query = `
       SELECT
         jv.id, jv.job_id, jv.language, jv.category_code, jv.job_title,
-        jv.job_code_title, jv.job_description, jv.job_family_code,
+        jv.job_code_title, '' AS job_description, jv.job_family_code,
         jv.job_level, jv.duty_station, jv.recruitment_type,
         jv.start_date, jv.end_date, jv.dept, jv.total_count,
         jv.jn, jv.jf, jv.jc, jv.jl, jv.created, jv.data_source,
@@ -124,10 +128,13 @@ module.exports.getFilteredJobs = async (req, res) => {
     const cached = await cache.get(cacheKey);
     if (cached) return res.json(cached);
 
+    // job_description omitted for the same reason as getAll — list views
+    // don't render it, and shipping it inflates the filtered-jobs payload
+    // by an order of magnitude.
     let baseQuery = `
       SELECT
         jv.id, jv.job_id, jv.language, jv.category_code, jv.job_title,
-        jv.job_code_title, jv.job_description, jv.job_family_code,
+        jv.job_code_title, '' AS job_description, jv.job_family_code,
         jv.job_level, jv.duty_station, jv.recruitment_type,
         jv.start_date, jv.end_date, jv.dept, jv.apply_link,
         jv.total_count, jv.jn, jv.jf, jv.jc, jv.jl, jv.created,
