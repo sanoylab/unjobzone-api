@@ -709,14 +709,16 @@ cron.schedule("0 20 * * *", async () => {
 //   await generateJobRelatedBlogPost();
 // });
 
-// — Render free-tier keep-warm —
-// Render spins free web services down after 15 min with no inbound HTTP
-// traffic. A self-ping every 10 minutes resets that timer, so first-time
-// visitors don't pay the ~30 s cold-start. The cron lives in-process, so
-// it only runs while the service is already awake — i.e. it keeps a
-// running dyno running. If the dyno does sleep (crash / cold deploy),
-// the first real visitor still pays the cold start once, and the cron
-// takes over from there.
+// — Render keep-warm + Redis cache pre-warm —
+// Two purposes, one cron:
+//   1. Reset Render's 15-min idle-shutdown timer so first-time visitors
+//      don't pay the ~30 s cold-start.
+//   2. Hit the endpoints the SPA actually loads on every page, so the
+//      Redis cache entries those handlers populate stay warm. The
+//      controllers cache responses with TTLs of 5–60 min — without
+//      something repeatedly touching them, every TTL boundary turns
+//      the next user into a cache-miss casualty. Running every 10 min
+//      keeps every entry under any of those TTLs continuously hot.
 //
 // SELF_URL preference order:
 //   1. RENDER_EXTERNAL_URL — set automatically by Render on every deploy
@@ -730,16 +732,39 @@ if (process.env.NODE_ENV !== "test") {
       ? "https://unjobzone-api.onrender.com"
       : null);
 
+  // Endpoints the SPA hits on a typical home → jobs → org → blog flow.
+  // Order matters only for log readability; they fan out in parallel.
+  const WARM_PATHS = [
+    "/api/v1",                                       // dyno keepalive
+    "/api/v1/jobs?page=1&size=6",                    // home featured strip
+    "/api/v1/jobs?page=1&size=500",                  // /jobs list page
+    "/api/v1/jobs/categories/list",
+    "/api/v1/jobs/categories/job_function/list",
+    "/api/v1/jobs/organizations/list",
+    "/api/v1/jobs/organizations/logo/list",
+    "/api/v1/jobs/duty_station/list",
+    "/api/v1/organizations?page=1&size=100",
+    "/api/v1/blogs?page=1&size=100",
+    "/api/v1/blogs?page=1&size=50",
+    "/api/v1/blogs/featured/list",
+  ];
+
   if (SELF_URL) {
-    cron.schedule("*/10 * * * *", async () => {
-      try {
-        const res = await axios.get(`${SELF_URL}/api/v1`, { timeout: 8000 });
-        console.log(`[keep-warm] ${SELF_URL}/api/v1 → ${res.status}`);
-      } catch (err) {
-        // Non-fatal — next tick will retry. Log so we notice persistent failure.
-        console.warn(`[keep-warm] ping failed: ${err.message}`);
-      }
-    });
-    console.log(`⏰ Keep-warm cron registered (every 10 min → ${SELF_URL})`);
+    const token = process.env.ACCESS_TOKEN_SECRET;
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+
+    const warm = async () => {
+      const results = await Promise.allSettled(
+        WARM_PATHS.map((p) =>
+          axios.get(`${SELF_URL}${p}`, { headers, timeout: 15_000 })
+        )
+      );
+      const ok = results.filter((r) => r.status === "fulfilled").length;
+      const fail = results.length - ok;
+      console.log(`[keep-warm] ${ok}/${results.length} cached${fail ? ` (${fail} failed)` : ""}`);
+    };
+
+    cron.schedule("*/10 * * * *", warm);
+    console.log(`⏰ Keep-warm + cache pre-warm registered (every 10 min, ${WARM_PATHS.length} paths)`);
   }
 }
