@@ -21,8 +21,11 @@ module.exports.getAll = async (req, res) => {
     const cached = await cache.get(cacheKey);
     if (cached) return res.json(cached);
 
+    // Same trim pattern as jobController.getAll — list views never render
+    // blog.content (only BlogDetail.jsx does via getById), but it's a full
+    // HTML blob per row. Replace with '' to preserve response shape.
     const query = `
-      SELECT id, thumbnail, title, content, featured
+      SELECT id, thumbnail, title, '' AS content, featured
       FROM blog
       LIMIT $1 OFFSET $2;
     `;
@@ -84,9 +87,10 @@ module.exports.getFeaturedBlog = async (req, res) => {
     if (cached) return res.json(cached);
 
     // The previous version had a `W HERE` typo here that made every call
-    // fail with a SQL syntax error.
+    // fail with a SQL syntax error. Also trim content — RecentBlog.jsx
+    // shows thumbnail + title only.
     const query = `
-      SELECT id, thumbnail, title, content, featured
+      SELECT id, thumbnail, title, '' AS content, featured
       FROM blog
       WHERE featured = 'Yes';
     `;
