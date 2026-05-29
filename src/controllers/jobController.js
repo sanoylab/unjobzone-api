@@ -70,68 +70,47 @@ module.exports.getAll = async (req, res) => {
 
 module.exports.getById = async (req, res) => {
   try {
-    const cacheKey = `jobs:${req.params.id}`;
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({ success: false, message: 'Invalid job id' });
+    }
 
-    // Check if data is in cache
-    let cachedData = await redisClient.get(cacheKey);
-    if (cachedData) {
-      return res.json(JSON.parse(cachedData));
+    const cacheKey = `jobs:${id}`;
+    const cached = await redisClient.get(cacheKey);
+    if (cached) {
+      return res.json(JSON.parse(cached));
     }
 
     const query = `
-      SELECT 
-        jv.id, 
-        jv.job_id, 
-        jv.language, 
-        jv.category_code, 
-        jv.job_title, 
-        jv.job_code_title, 
-        jv.job_description, 
-        jv.job_family_code, 
-        jv.job_level, 
-        jv.duty_station, 
-        jv.recruitment_type, 
-        jv.start_date, 
-        jv.end_date, 
-        jv.dept, 
-        jv.apply_link,
-        jv.total_count, 
-        jv.jn, 
-        jv.jf, 
-        jv.jc, 
-        jv.jl, 
-        jv.created, 
-        jv.data_source,
-        jv.apply_link,
-        jv.source_logo_url,
-        org.logo,
-        org.short_name,
-        org.long_name
-      FROM 
-        job_vacancies jv
-      JOIN 
-        organization org ON jv.organization_id = org.id
-      WHERE 
-        jv.id = $1
-      ORDER BY 
-        jv.end_date ASC;
+      SELECT
+        jv.id, jv.job_id, jv.language, jv.category_code, jv.job_title,
+        jv.job_code_title, jv.job_description, jv.job_family_code,
+        jv.job_level, jv.duty_station, jv.recruitment_type,
+        jv.start_date, jv.end_date, jv.dept, jv.total_count,
+        jv.jn, jv.jf, jv.jc, jv.jl, jv.created, jv.data_source,
+        jv.apply_link, jv.source_logo_url,
+        org.logo, org.short_name, org.long_name
+      FROM job_vacancies jv
+      LEFT JOIN organization org ON jv.organization_id = org.id
+      WHERE jv.id = $1
+      LIMIT 1;
     `;
 
-    const values = [req.params.id];
-    let result = null;
-    try {
-      result = await pool.query(query, values);
-      console.log(result.rows);
-    } catch (e) {
-      console.log(e);
-    }
+    const result = await pool.query(query, [id]);
 
-    // Cache the result
-    await redisClient.set(cacheKey, JSON.stringify({ success: true, timestamp: new Date(), data: result.rows }), 'EX', 3600); // Cache for 1 hour
+    const payload = { success: true, timestamp: new Date(), data: result.rows };
+    await redisClient.set(cacheKey, JSON.stringify(payload), 'EX', 3600);
 
-    res.status(200).json({ success: true, timestamp: new Date(), data: result.rows });
-  } catch (e) {
-    res.status(400).json({ success: false, message: e.message });
+    res.status(200).json(payload);
+  } catch (err) {
+    console.error('[jobs.getById]', err);
+    // TEMP: surface the underlying error so we can diagnose a live 400.
+    // Remove once the root cause is known.
+    res.status(500).json({
+      success: false,
+      message: 'Failed to load job',
+      _debug: { name: err.name, message: err.message, code: err.code },
+    });
   }
 };
 
