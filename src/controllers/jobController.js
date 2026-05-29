@@ -1,84 +1,68 @@
-const e = require("express");
 const { Pool } = require("pg");
-require("dotenv").config();
 const { credentials } = require("../util/db");
 const redisClient = require('../redisClient');
 
 const pool = new Pool(credentials);
 
+// Whitelist of column names that getFilteredJobs is allowed to filter on.
+// Any other key in req.query is silently ignored. Keeps caller-controlled
+// strings out of the SQL identifier position.
+const FILTERABLE_COLUMNS = new Set([
+  'job_title',
+  'duty_station',
+  'dept',
+  'recruitment_type',
+  'start_date',
+  'end_date',
+  'jn', 'jf', 'jc', 'jl',
+]);
+
+// Bound pagination so a hostile client can't pull the whole table.
+function clampPage(raw)  { return Math.max(1, parseInt(raw, 10) || 1); }
+function clampSize(raw)  { return Math.min(100, Math.max(1, parseInt(raw, 10) || 10)); }
+
 module.exports.getAll = async (req, res) => {
   try {
-    const page = req.query.page || 1;
-    const size = req.query.size || 10;
+    const page = clampPage(req.query.page);
+    const size = clampSize(req.query.size);
+    const offset = (page - 1) * size;
     const cacheKey = `jobs:all:${page}:${size}`;
 
-    // Check if data is in cache
-    let cachedData = await redisClient.get(cacheKey);
-    if (cachedData) {
-      return res.json(JSON.parse(cachedData));
+    const cached = await redisClient.get(cacheKey);
+    if (cached) {
+      return res.json(JSON.parse(cached));
     }
 
-    let query = `
-      SELECT 
-        jv.id, 
-        jv.job_id, 
-        jv.language, 
-        jv.category_code, 
-        jv.job_title, 
-        jv.job_code_title, 
-        jv.job_description, 
-        jv.job_family_code, 
-        jv.job_level, 
-        jv.duty_station, 
-        jv.recruitment_type, 
-        jv.start_date, 
-        jv.end_date, 
-        jv.dept, 
-        jv.total_count, 
-        jv.jn, 
-        jv.jf, 
-        jv.jc, 
-        jv.jl, 
-        jv.created, 
-        jv.data_source,
-        jv.apply_link,
-        jv.source_logo_url,
-        org.logo,
-        org.short_name,
-        org.long_name
-      FROM 
-        job_vacancies jv
-      JOIN 
-        organization org ON jv.organization_id = org.id
-      ORDER BY 
-        jv.end_date ASC
-      LIMIT 
-        ${size} 
-      OFFSET 
-        ((${page} - 1) * ${size});
+    const query = `
+      SELECT
+        jv.id, jv.job_id, jv.language, jv.category_code, jv.job_title,
+        jv.job_code_title, jv.job_description, jv.job_family_code,
+        jv.job_level, jv.duty_station, jv.recruitment_type,
+        jv.start_date, jv.end_date, jv.dept, jv.total_count,
+        jv.jn, jv.jf, jv.jc, jv.jl, jv.created, jv.data_source,
+        jv.apply_link, jv.source_logo_url,
+        org.logo, org.short_name, org.long_name
+      FROM job_vacancies jv
+      JOIN organization org ON jv.organization_id = org.id
+      ORDER BY jv.end_date ASC
+      LIMIT $1 OFFSET $2;
     `;
 
-    let result = null;
-
-    // Query to get the total count of records
-    let countQuery = 'SELECT COUNT(*) FROM job_vacancies';
-    let countResult = null;
-
-    try {
-      result = await pool.query(query);
-      countResult = await pool.query(countQuery);
-    } catch (e) {
-      console.log(e);
-    }
+    const [result, countResult] = await Promise.all([
+      pool.query(query, [size, offset]),
+      pool.query('SELECT COUNT(*) FROM job_vacancies'),
+    ]);
 
     const totalRecords = parseInt(countResult.rows[0].count, 10);
+    const payload = { success: true, totalRecords, timestamp: new Date(), data: result.rows };
 
-    // Cache the result
-    await redisClient.set(cacheKey, JSON.stringify({ success: true, totalRecords, timestamp: new Date(), data: result.rows }), 'EX', 3600); // Cache for 1 hour
+    // 1 h TTL — the ETL flushes jobs:* on each successful agency run.
+    await redisClient.set(cacheKey, JSON.stringify(payload), 'EX', 3600);
 
-    res.status(200).json({ success: true, totalRecords, timestamp: new Date(), data: result.rows });
-  } catch (e) {
-    res.status(400).json({ success: false, message: e.message });
+    res.status(200).json(payload);
+  } catch (err) {
+    console.error('[jobs.getAll]', err);
+    res.status(500).json({ success: false, message: 'Failed to load jobs' });
   }
 };
 
@@ -198,15 +182,15 @@ module.exports.getFilteredJobs = async (req, res) => {
     
     const queryParams = [];
 
-    // Construct the dynamic WHERE clause based on provided filters.
-    // Ignore keys with empty values.
+    // Build the dynamic WHERE — but only for whitelisted column names so
+    // a hostile ?key injection can't reach the SQL identifier position.
     Object.entries(req.query).forEach(([key, value]) => {
-      if (key === 'page' || key === 'size') return;
+      if (!FILTERABLE_COLUMNS.has(key)) return;
       if (!value || value.toString().trim() === '') return;
 
       if (key === 'job_title') {
-        baseQuery += ` AND to_tsvector('english', ${key}) @@ to_tsquery('english', $${queryParams.length + 1})`;
-        countQuery += ` AND to_tsvector('english', ${key}) @@ to_tsquery('english', $${queryParams.length + 1})`;
+        baseQuery += ` AND to_tsvector('english', job_title) @@ to_tsquery('english', $${queryParams.length + 1})`;
+        countQuery += ` AND to_tsvector('english', job_title) @@ to_tsquery('english', $${queryParams.length + 1})`;
         queryParams.push(value.split(' ').join(' & '));
       } else {
         baseQuery += ` AND ${key} ILIKE $${queryParams.length + 1}`;
@@ -215,25 +199,16 @@ module.exports.getFilteredJobs = async (req, res) => {
       }
     });
 
-    // Add pagination parameters
-    const page = parseInt(req.query.page, 10) || 1;
-    const size = parseInt(req.query.size, 10) || 10;
+    const page = clampPage(req.query.page);
+    const size = clampSize(req.query.size);
     const offset = (page - 1) * size;
     baseQuery += ` ORDER BY end_date ASC LIMIT $${queryParams.length + 1} OFFSET $${queryParams.length + 2}`;
     queryParams.push(size, offset);
 
-    let result = null;
-    let countResult = null;
-
-    try {
-      result = await pool.query(baseQuery, queryParams);
-      // Exclude pagination values for the count query
-      countResult = await pool.query(countQuery, queryParams.slice(0, -2));
-      console.log(countQuery);
-    } catch (e) {
-      console.error(e);
-      return res.status(500).json({ success: false, message: 'Database query error' });
-    }
+    const [result, countResult] = await Promise.all([
+      pool.query(baseQuery, queryParams),
+      pool.query(countQuery, queryParams.slice(0, -2)),
+    ]);
 
     const totalRecords = parseInt(countResult.rows[0].count, 10);
 
@@ -243,8 +218,9 @@ module.exports.getFilteredJobs = async (req, res) => {
       totalRecords,
       data: result.rows,
     });
-  } catch (e) {
-    res.status(400).json({ success: false, message: e.message });
+  } catch (err) {
+    console.error('[jobs.getFilteredJobs]', err);
+    res.status(500).json({ success: false, message: 'Failed to load jobs' });
   }
 };
 
