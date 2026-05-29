@@ -103,8 +103,30 @@ Sentry.setupExpressErrorHandler(app);
 app.use(errors.notFound);
 app.use(errors.errorHandler);
 
+// Idempotent startup migrations — make sure schema columns the controllers
+// rely on actually exist on the live DB. These ALTERs are no-ops if the
+// column is already there. Add new IF NOT EXISTS rows here when a controller
+// or ETL starts referencing a column the older deploy didn't have.
+async function ensureSchema() {
+  const { Pool } = require("pg");
+  const { credentials } = require("./util/db");
+  const pool = new Pool(credentials);
+  try {
+    await pool.query(`
+      ALTER TABLE job_vacancies
+        ADD COLUMN IF NOT EXISTS source_logo_url TEXT;
+    `);
+    console.log("✅ Schema migrations OK (job_vacancies.source_logo_url ensured)");
+  } catch (err) {
+    console.error("⚠️ Schema migration failed:", err.message);
+  } finally {
+    await pool.end();
+  }
+}
+
 app.listen(PORT, async () => {
   console.log(`API Server is started on PORT: ${PORT}`);
+  await ensureSchema();
   runEtl();
   
   // Initialize ICAO Job Monitor if email credentials are provided

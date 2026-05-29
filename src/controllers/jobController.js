@@ -104,13 +104,7 @@ module.exports.getById = async (req, res) => {
     res.status(200).json(payload);
   } catch (err) {
     console.error('[jobs.getById]', err);
-    // TEMP: surface the underlying error so we can diagnose a live 400.
-    // Remove once the root cause is known.
-    res.status(500).json({
-      success: false,
-      message: 'Failed to load job',
-      _debug: { name: err.name, message: err.message, code: err.code },
-    });
+    res.status(500).json({ success: false, message: 'Failed to load job' });
   }
 };
 
