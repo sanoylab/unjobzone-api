@@ -1,8 +1,5 @@
-const { Pool } = require("pg");
-const { credentials } = require("../util/db");
+const { pool } = require("../util/db");
 const redisClient = require('../redisClient');
-
-const pool = new Pool(credentials);
 
 // Whitelist of column names that getFilteredJobs is allowed to filter on.
 // Any other key in req.query is silently ignored. Keeps caller-controlled

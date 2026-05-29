@@ -1,7 +1,4 @@
-const { Pool } = require("pg");
-const { credentials } = require("../util/db");
-
-const pool = new Pool(credentials);
+const { pool } = require("../util/db");
 
 function clampPage(raw) { return Math.max(1, parseInt(raw, 10) || 1); }
 function clampSize(raw) { return Math.min(1000, Math.max(1, parseInt(raw, 10) || 10)); }
