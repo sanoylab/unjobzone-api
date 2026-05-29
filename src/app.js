@@ -103,25 +103,43 @@ Sentry.setupExpressErrorHandler(app);
 app.use(errors.notFound);
 app.use(errors.errorHandler);
 
-// Idempotent startup migrations — make sure schema columns the controllers
-// rely on actually exist on the live DB. These ALTERs are no-ops if the
-// column is already there. Add new IF NOT EXISTS rows here when a controller
-// or ETL starts referencing a column the older deploy didn't have.
+// Idempotent startup migrations — make sure schema columns and indexes
+// the controllers rely on actually exist on the live DB. These statements
+// are no-ops when already applied (`IF NOT EXISTS` for indexes and ALTERs).
+// Run on every boot before runEtl() / before traffic starts hitting the
+// API.
 async function ensureSchema() {
-  const { Pool } = require("pg");
-  const { credentials } = require("./util/db");
-  const pool = new Pool(credentials);
-  try {
-    await pool.query(`
-      ALTER TABLE job_vacancies
-        ADD COLUMN IF NOT EXISTS source_logo_url TEXT;
-    `);
-    console.log("✅ Schema migrations OK (job_vacancies.source_logo_url ensured)");
-  } catch (err) {
-    console.error("⚠️ Schema migration failed:", err.message);
-  } finally {
-    await pool.end();
+  const { pool } = require("./util/db");
+  // Each statement runs independently so one failure doesn't skip the rest.
+  const statements = [
+    // — Missing column from src/etl/database-schema.sql that never got applied.
+    `ALTER TABLE job_vacancies ADD COLUMN IF NOT EXISTS source_logo_url TEXT;`,
+
+    // — Indexes that match the controllers' query patterns. Without these,
+    //   every getAll / getFilteredJobs does a full table scan + sort. With
+    //   the table at ~1700 rows this isn't catastrophic, but it gets worse
+    //   linearly as the table grows.
+    `CREATE INDEX IF NOT EXISTS idx_job_vacancies_end_date ON job_vacancies (end_date);`,
+    `CREATE INDEX IF NOT EXISTS idx_job_vacancies_dept ON job_vacancies (dept);`,
+    `CREATE INDEX IF NOT EXISTS idx_job_vacancies_duty_station ON job_vacancies (duty_station);`,
+    `CREATE INDEX IF NOT EXISTS idx_job_vacancies_jn ON job_vacancies (jn);`,
+    `CREATE INDEX IF NOT EXISTS idx_job_vacancies_jf ON job_vacancies (jf);`,
+
+    // — GIN index on the full-text-search column used by getFilteredJobs.
+    //   Without it `to_tsvector('english', job_title) @@ to_tsquery(...)`
+    //   has to re-compute the tsvector for every row on every query.
+    `CREATE INDEX IF NOT EXISTS idx_job_vacancies_job_title_tsv
+       ON job_vacancies USING GIN (to_tsvector('english', job_title));`,
+  ];
+
+  for (const sql of statements) {
+    try {
+      await pool.query(sql);
+    } catch (err) {
+      console.error("⚠️ Schema migration step failed:", err.message);
+    }
   }
+  console.log("✅ Schema migrations applied (columns + indexes)");
 }
 
 app.listen(PORT, async () => {
